@@ -1,0 +1,20 @@
+'use strict';
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.ready = exports.update = exports.$ = exports.template = void 0;
+exports.template = `
+<ui-prop type="dump" class="test"></ui-prop>
+`;
+exports.$ = {
+    test: '.test',
+};
+var methods = {};
+function update(dump) {
+    // 使用 ui-porp 自动渲染，设置 prop 的 type 为 dump
+    // render 传入一个 dump 数据，能够自动渲染出对应的界面
+    // 自动渲染的界面修改后，能够自动提交数据
+    this.$.test.render(dump.value.label);
+}
+exports.update = update;
+function ready() { }
+exports.ready = ready;
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoidmlldy1zdGF0ZS1oYW5kbGVyLmpzIiwic291cmNlUm9vdCI6IiIsInNvdXJjZXMiOlsiLi4vLi4vLi4vc291cmNlL2NvbnRyaWJ1dGlvbnMvaW5zcGVjdG9yL3ZpZXctc3RhdGUtaGFuZGxlci50cyJdLCJuYW1lcyI6W10sIm1hcHBpbmdzIjoiQUFBQSxZQUFZLENBQUM7OztBQUlBLFFBQUEsUUFBUSxHQUFHOztDQUV2QixDQUFDO0FBRVcsUUFBQSxDQUFDLEdBQUc7SUFDYixJQUFJLEVBQUUsT0FBTztDQUNoQixDQUFDO0FBQ0YsSUFBSSxPQUFPLEdBQUcsRUFBRSxDQUFDO0FBQ2pCLFNBQWdCLE1BQU0sQ0FBNEMsSUFBUztJQUN2RSx3Q0FBd0M7SUFDeEMsbUNBQW1DO0lBQ25DLHNCQUFzQjtJQUN0QixJQUFJLENBQUMsQ0FBQyxDQUFDLElBQUksQ0FBQyxNQUFNLENBQUMsSUFBSSxDQUFDLEtBQUssQ0FBQyxLQUFLLENBQUMsQ0FBQztBQUN6QyxDQUFDO0FBTEQsd0JBS0M7QUFDRCxTQUFnQixLQUFLLEtBQTZDLENBQUM7QUFBbkUsc0JBQW1FIiwic291cmNlc0NvbnRlbnQiOlsiJ3VzZSBzdHJpY3QnO1xuXG50eXBlIFNlbGVjdG9yPCQ+ID0geyAkOiBSZWNvcmQ8a2V5b2YgJCwgYW55IHwgbnVsbD4gfVxuXG5leHBvcnQgY29uc3QgdGVtcGxhdGUgPSBgXG48dWktcHJvcCB0eXBlPVwiZHVtcFwiIGNsYXNzPVwidGVzdFwiPjwvdWktcHJvcD5cbmA7XG5cbmV4cG9ydCBjb25zdCAkID0ge1xuICAgIHRlc3Q6ICcudGVzdCcsXG59O1xudmFyIG1ldGhvZHMgPSB7fTtcbmV4cG9ydCBmdW5jdGlvbiB1cGRhdGUodGhpczogU2VsZWN0b3I8dHlwZW9mICQ+ICYgdHlwZW9mIG1ldGhvZHMsIGR1bXA6IGFueSkge1xuICAgIC8vIOS9v+eUqCB1aS1wb3JwIOiHquWKqOa4suafk++8jOiuvue9riBwcm9wIOeahCB0eXBlIOS4uiBkdW1wXG4gICAgLy8gcmVuZGVyIOS8oOWFpeS4gOS4qiBkdW1wIOaVsOaNru+8jOiDveWkn+iHquWKqOa4suafk+WHuuWvueW6lOeahOeVjOmdolxuICAgIC8vIOiHquWKqOa4suafk+eahOeVjOmdouS/ruaUueWQju+8jOiDveWkn+iHquWKqOaPkOS6pOaVsOaNrlxuICAgIHRoaXMuJC50ZXN0LnJlbmRlcihkdW1wLnZhbHVlLmxhYmVsKTtcbn1cbmV4cG9ydCBmdW5jdGlvbiByZWFkeSh0aGlzOiBTZWxlY3Rvcjx0eXBlb2YgJD4gJiB0eXBlb2YgbWV0aG9kcykge30iXX0=
