@@ -172,6 +172,14 @@ export class ViewState extends Animation {
     }
 
     set defaultClip(value) {
+        if (value == null || value == undefined) { 
+            return;
+        }
+
+        const has = super.clips.find(v => v!.name == value!.name);
+        if (!has) {
+            this.addClip(value!, value!.name);
+        }
         this._defaultClip = value;
     }
 
