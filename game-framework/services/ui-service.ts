@@ -394,7 +394,7 @@ export class UIService extends EventDispatcher<EventOverview> implements IGameFr
 
                 let clickBg: Node | null = null;
                 if (options.showType == UIShowType.BlackBaseView) {
-                    clickBg = await this.getClickBg();
+                    clickBg = await view.getClickBg() ?? await this.getClickBg();
                     layer.addChild(clickBg);
                 }
 

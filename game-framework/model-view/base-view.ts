@@ -91,6 +91,17 @@ export abstract class BaseView<T extends BaseService> extends Component implemen
     }
 
     /**
+    * 获取界面本身的点击背景
+    *
+    * @private
+    * @return {*}  {Promise<IGameFramework.Nullable<Node>>}
+    * @memberof BaseView
+    */
+    public async getClickBg(): Promise<IGameFramework.Nullable<Node>> {
+        return Promise.resolve(null);
+    }
+
+    /**
      * 面板关闭后通知
      *
      * @template R
