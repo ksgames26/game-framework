@@ -195,6 +195,22 @@ class AssetHandle<T extends IGameFramework.Constructor<Asset>> {
         this._ref++;
         return this.getAsset();
     }
+
+    /**
+     * 设置SpriteFrame
+     *
+     * @param {Sprite} spr
+     * @param {boolean} doDestroy
+     * @memberof AssetHandle
+     */
+    public setFrame(spr: Sprite, doDestroy: boolean): void {
+        if (js.getClassName(this.type) != js.getClassName(SpriteFrame)) {
+            throw new Error("AssetHandle.setFrame only support SpriteFrame");
+        }
+
+        const assetSvr = Container.get(AssetService)!;
+        assetSvr.setSpriteFrame(spr, this as unknown as AssetHandle<typeof SpriteFrame>, doDestroy);
+    }
 }
 
 /**

@@ -33,6 +33,7 @@ export * from "./model-view/components/draggable-node";
 export * from "./model-view/components/label/popup-utils";
 export * from "./model-view/components/popup/popup-message";
 export * from "./model-view/components/resizable/resizable";
+export * from "./model-view/misc";
 
 // 工具
 export * from "./utils/object-pool"
