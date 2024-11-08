@@ -3,7 +3,7 @@
  * @zh 为扩展的主进程的注册方法
  */
 export const methods: { [key: string]: (...any: any) => any } = {};
-console.log("s")
+
 /**
  * @en Method Triggered on Extension Startup
  * @zh 扩展启动时触发的方法

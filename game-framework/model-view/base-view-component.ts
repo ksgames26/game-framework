@@ -4,7 +4,7 @@ import { UIService } from "../services/ui-service";
 import { BaseService } from "./base-service";
 import { type BaseView } from "./base-view";
 import { bindingAndFixSpecialShapedScreen } from "./binding-and-fix-special-shaped-screen";
-const { ccclass, property } = _decorator;
+const { ccclass, property, menu } = _decorator;
 
 /**
  * 视图组件基类
@@ -17,6 +17,7 @@ const { ccclass, property } = _decorator;
  * @extends {Component}
  */
 @ccclass("BaseViewComponent")
+@menu("GameFramework/ViewState/BaseViewComponent")
 export abstract class BaseViewComponent<U extends BaseService, T extends BaseView<U>> extends Component {
     /**
      * 组件所在的祖视图

@@ -133,6 +133,8 @@ class ViewStateMachine extends AsyncStateMachine<ViewState, DefaultBlackboard, S
     }
 }
 
+DEBUG && assert(!!Animation, "项目设置中未启用动画模块");
+
 /**
  * 基于动画状态的视图状态控制器
  *
@@ -141,7 +143,7 @@ class ViewStateMachine extends AsyncStateMachine<ViewState, DefaultBlackboard, S
  * @extends {Animation}
  */
 @ccclass("ViewState")
-@menu("GameFramework/ViewState")
+@menu("GameFramework/ViewState/ViewState")
 export class ViewState extends Animation {
     /**
      * 视图状态机

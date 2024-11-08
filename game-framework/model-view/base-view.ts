@@ -1,4 +1,4 @@
-import { Component, Renderer, UITransform, Widget, _decorator, easing, js, lerp } from "cc";
+import { Component, Renderer, UITransform, Node, Widget, _decorator, easing, js, lerp } from "cc";
 import { DEBUG } from "cc/env";
 import { Container, isDestroyed, logger, secFrame } from "db://game-core/game-framework";
 import { getEventListeners } from "../core/decorators";
@@ -9,13 +9,14 @@ import { type BaseService } from "./base-service";
 import { BaseViewComponent } from "./base-view-component";
 import { bindingAndFixSpecialShapedScreen } from "./binding-and-fix-special-shaped-screen";
 
-const { ccclass, property } = _decorator;
+const { ccclass, menu } = _decorator;
 
 enum PushPopState {
     None, Push, Pop
 }
 
 @ccclass("BaseView")
+@menu("GameFramework/ViewState/BaseView")
 export abstract class BaseView<T extends BaseService> extends Component implements IGameFramework.IDisposable {
 
     /**

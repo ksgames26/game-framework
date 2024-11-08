@@ -194,8 +194,6 @@ export class UIService extends EventDispatcher<EventOverview> implements IGameFr
         this._top = this.createLayer("Top");
         this._popUp = this.createLayer("PopUp");
 
-        // this._popUp.touchEnable = false;
-
         if (args && args.createTouchLayer) {
             this._touch = this.createLayer("Touch");
             this._touch.on(Node.EventType.TOUCH_START, this.onTouchStart, this);

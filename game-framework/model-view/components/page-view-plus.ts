@@ -1,6 +1,6 @@
 import { _decorator, Event, EventTouch, Node, PageView, Vec2, Vec3 } from "cc";
 import { ScrollViewPlus } from "./scroll-view-plus";
-const { ccclass } = _decorator;
+const { ccclass,menu } = _decorator;
 
 const temp = new Vec2();
 const deltaPos = new Vec3();
@@ -28,6 +28,7 @@ const deltaPos1 = new Vec3();
  * @extends {PageView}
  */
 @ccclass("PageViewPlus")
+@menu("GameFramework/ViewState/PageViewPlus")
 export class PageViewPlus extends PageView {
 
     private _allScrllViewChildren: ScrollViewPlus[] = [];

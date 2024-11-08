@@ -6,7 +6,7 @@ import { OpenViewOptions, UIService } from "../services/ui-service";
 import { TaskService } from "../services/task-service";
 const { ccclass } = _decorator;
 
-@ccclass("BaseService")
+@ccclass("ViewState/BaseService")
 export abstract class BaseService<E extends IGameFramework.EventOverview = { [key: string]: any }> extends EventDispatcher<E> {
     public abstract viewOptions(): OpenViewOptions;
 
