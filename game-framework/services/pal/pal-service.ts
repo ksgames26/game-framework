@@ -1,11 +1,20 @@
+import { DefaultPal } from "./impl/default-pal";
 import { EmptyPal } from "./impl/empty";
-import { IPal } from "./ipal";
+import { ILoginAdapter, IPal } from "./ipal";
 
 export class PalService implements IPal {
 
     private _pal: IPal = new EmptyPal();
 
     constructor() { }
+
+    set adapter(adapter: ILoginAdapter) {
+        this._pal.adapter = adapter;
+    }
+
+    get adapter(): ILoginAdapter {
+        return this._pal.adapter;
+    }
 
     /**
      * 自动适配平台
@@ -15,7 +24,11 @@ export class PalService implements IPal {
      * @memberof PalService
      */
     public adaptation(): void {
+        this._pal = new DefaultPal();
+    }
 
+    public get openId(): string {
+        return this._pal.openId;
     }
 
     /**

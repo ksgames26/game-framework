@@ -10,6 +10,8 @@ export * from "./intelligence/sync-state-machine";
 
 // 平台
 export * from "./services/pal/pal-service";
+export * from "./services/pal/impl/default-pal";
+export * from "./services/pal/impl/empty";
 export * from "./services/pal/ipal";
 
 // 服务

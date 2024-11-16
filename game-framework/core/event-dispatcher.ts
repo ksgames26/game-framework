@@ -120,6 +120,7 @@ export class EventDispatcher<TEventOverview extends IGameFramework.EventOverview
             listener.listener.call(listener.callee, eventData);
             listener.count--;
         }
+        
         listeners.erase(events => {
             return (events.count <= 0);
         }).forEach(listener => {
@@ -237,6 +238,18 @@ export class EventDispatcher<TEventOverview extends IGameFramework.EventOverview
         }
 
         return false;
+    }
+
+    /**
+     * 判断是否监听了该事件
+     *
+     * @template TEventName
+     * @param {TEventName} eventName
+     * @return {*}  {boolean}
+     * @memberof EventDispatcher
+     */
+    public has<TEventName extends Extract<keyof TEventOverview, string>>(eventName: TEventName): boolean {
+        return this.listeners.has(eventName);
     }
 
     /**

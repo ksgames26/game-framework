@@ -1,11 +1,30 @@
 
+export interface ILoginAdapter {
+
+    login<T>(openId: string): Promise<T>;
+
+    /**
+     * 登出
+     *
+     * @return {*}  {Promise<void>}
+     * @memberof IPal
+     */
+    logout(): Promise<void>;
+}
+
 /**
  * 平台接口
  *
  * @export
  * @interface IPal
  */
-export interface IPal {
+export interface IPal extends ILoginAdapter {
+
+    /** 获取用户唯一标识 */
+    get openId(): string;
+
+    set adapter(adapter: ILoginAdapter);
+    get adapter(): ILoginAdapter;
 
     /**
      * 登录
