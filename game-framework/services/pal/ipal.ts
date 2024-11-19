@@ -1,6 +1,14 @@
 
-export interface ILoginAdapter {
+export interface ILoginAdapter extends IGameFramework.IPalAdapter {
 
+    /**
+     * 登录
+     *
+     * @template T
+     * @param {string} openId
+     * @return {*}  {Promise<T>}
+     * @memberof ILoginAdapter
+     */
     login<T>(openId: string): Promise<T>;
 
     /**
@@ -18,7 +26,7 @@ export interface ILoginAdapter {
  * @export
  * @interface IPal
  */
-export interface IPal extends ILoginAdapter {
+export interface IPal{
 
     /** 获取用户唯一标识 */
     get openId(): string;

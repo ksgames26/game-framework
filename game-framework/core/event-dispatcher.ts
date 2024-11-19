@@ -1,5 +1,5 @@
 import { Component, Node } from "cc";
-import { fnEmpty, implementation } from "db://game-core/game-framework";
+import { fnEmpty, implementation, makeDefered } from "db://game-core/game-framework";
 import { SortedSet } from "../structures/sorted-set";
 import { ObjectPools } from "../utils/object-pool";
 
@@ -120,7 +120,7 @@ export class EventDispatcher<TEventOverview extends IGameFramework.EventOverview
             listener.listener.call(listener.callee, eventData);
             listener.count--;
         }
-        
+
         listeners.erase(events => {
             return (events.count <= 0);
         }).forEach(listener => {
@@ -158,6 +158,27 @@ export class EventDispatcher<TEventOverview extends IGameFramework.EventOverview
 
         listeners.add(listenersPool.obtain().set({ eventName, listener: listener as IGameFramework.EventListener<IGameFramework.EventData>, priority, callee, count }));
         return true;
+    }
+
+    /**
+     * 优先调用优先级更高的侦听器。
+     * 具有相同优先级的监听器按其注册的顺序调用。
+     * 
+     * 异步的监听器允许对一个事件进行对个监听，但是异步监听器只能监听一次。触发以后自动销毁
+     */
+    public addAsyncListener<TEventName extends Extract<keyof TEventOverview, string>>(
+        eventName: TEventName,
+        priority: number = 0,
+    ): Promise<TEventOverview[TEventName]> {
+        let listeners: IGameFramework.Nullable<SortedSet<Listener>> = this.listeners.get(eventName);
+        if (!listeners) {
+            listeners = new SortedSet<Listener>((a, b) => a.priority - b.priority);
+            this.listeners.set(eventName, listeners);
+        }
+
+        const { resolve, promise } = makeDefered<IGameFramework.EventData>();
+        listeners.add(listenersPool.obtain().set({ eventName, listener: resolve as IGameFramework.EventListener<IGameFramework.EventData>, priority, callee: null!, count: 1 }));
+        return promise;
     }
 
     /**
@@ -264,6 +285,14 @@ export class EventDispatcher<TEventOverview extends IGameFramework.EventOverview
         this.listeners.clear();
     }
 
+    /**
+     * 获取某个类型事件的所有侦听器。
+     *
+     * @private
+     * @param {IGameFramework.EventName} eventName
+     * @return {*}  {SortedSet<Listener>}
+     * @memberof EventDispatcher
+     */
     private getListeners(eventName: IGameFramework.EventName): SortedSet<Listener> {
         if (this.listeners.has(eventName)) {
             return this.listeners.get(eventName)!;
