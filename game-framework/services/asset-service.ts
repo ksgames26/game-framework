@@ -714,9 +714,9 @@ export class AssetService {
      * @memberof AssetService
      */
     public loadMultiAssets<T extends number>(assetHandles: MultiAssetsHandle): AsyncLoadDelegate<T> {
-        DEBUG && assert(!!assetHandles);
-        DEBUG && assert(Array.isArray(assetHandles.bundle) && assetHandles.bundle.length > 0);
-        DEBUG && assert(Array.isArray(assetHandles.handles) && assetHandles.handles.length > 0);
+        DEBUG && assert(!!assetHandles, "assetHandles is null");
+        DEBUG && assert(Array.isArray(assetHandles.bundle) && assetHandles.bundle.length > 0, "bundle is empty");
+        DEBUG && assert(Array.isArray(assetHandles.handles) && assetHandles.handles.length > 0, "handles is empty");
 
         return new AsyncLoadDelegate<T>(assetHandles.handles, new Set(assetHandles.bundle));
     }
@@ -737,8 +737,8 @@ export class AssetService {
      * @memberof AssetService
      */
     public loadAssets<T extends number>(assetHandles: AssetHandle<typeof Asset>[]): AsyncLoadDelegate<T> {
-        DEBUG && assert(!!assetHandles);
-        DEBUG && assert(Array.isArray(assetHandles) && assetHandles.length > 0);
+        DEBUG && assert(!!assetHandles, "assetHandles is null");
+        DEBUG && assert(Array.isArray(assetHandles) && assetHandles.length > 0, "handles is empty");
 
         return new AsyncLoadDelegate<T>(assetHandles);
     }
@@ -760,8 +760,8 @@ export class AssetService {
      * @memberof AssetService
      */
     public loadDir<T extends number>(assetHandles: AssetHandle<typeof Asset>): AsyncLoadDelegate<T> {
-        DEBUG && assert(!!assetHandles);
-        DEBUG && assert(assetHandles.isDir());
+        DEBUG && assert(!!assetHandles, "assetHandles is null");
+        DEBUG && assert(assetHandles.isDir(), "assetHandles is dir");
 
         return new AsyncLoadDelegate<T>([assetHandles]);
     }
@@ -780,7 +780,7 @@ export class AssetService {
      * @memberof AssetService
      */
     public async getAssetAsync<T extends IGameFramework.Constructor<Asset>>(assetHandle: AssetHandle<T>): Promise<IGameFramework.Nullable<InstanceType<T>>> {
-        DEBUG && assert(!!assetHandle);
+        DEBUG && assert(!!assetHandle,"assetInfo is null");
 
         const bundle = await this.getAsyncBundleUrl(assetHandle.bundle);
         if (!bundle) {
@@ -824,7 +824,7 @@ export class AssetService {
      * @memberof AssetService
      */
     public async releaseAsyncAsset<T extends IGameFramework.Constructor<Asset>>(assetHandle: AssetHandle<T>, doDestroy: boolean): Promise<void> {
-        DEBUG && assert(!!assetHandle);
+        DEBUG && assert(!!assetHandle, "assetInfo is null");
 
         const bundle = await this.getAsyncBundleUrl(assetHandle.bundle);
         this.doReleaseAsset(bundle, assetHandle, doDestroy);
@@ -839,7 +839,7 @@ export class AssetService {
      * @memberof AssetService
      */
     public releaseAsset<T extends IGameFramework.Constructor<Asset>>(assetHandle: AssetHandle<T>, doDestroy: boolean): void {
-        DEBUG && assert(!!assetHandle);
+        DEBUG && assert(!!assetHandle, "assetInfo is null");
 
         const bundle = this.getBundleUrl(assetHandle.bundle);
         this.doReleaseAsset(bundle, assetHandle, doDestroy);
