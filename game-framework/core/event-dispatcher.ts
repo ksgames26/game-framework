@@ -1,5 +1,5 @@
 import { Component, Node } from "cc";
-import { fnEmpty, implementation, makeDefered } from "db://game-core/game-framework";
+import { fnEmpty, implementation, makeDeferred } from "db://game-core/game-framework";
 import { SortedSet } from "../structures/sorted-set";
 import { ObjectPools } from "../utils/object-pool";
 
@@ -176,7 +176,7 @@ export class EventDispatcher<TEventOverview extends IGameFramework.EventOverview
             this.listeners.set(eventName, listeners);
         }
 
-        const { resolve, promise } = makeDefered<IGameFramework.EventData>();
+        const { resolve, promise } = makeDeferred<IGameFramework.EventData>();
         listeners.add(listenersPool.obtain().set({ eventName, listener: resolve as IGameFramework.EventListener<IGameFramework.EventData>, priority, callee: null!, count: 1 }));
         return promise;
     }
