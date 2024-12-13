@@ -245,6 +245,11 @@ export class AsyncNextStateMachine extends AsyncTask<IGameFramework.ITaskActuato
         this._blackboard.setValue(key, val);
     }
 
+    public cancel(): void {
+        this._running = false;
+        super.cancel();
+    }
+
     /**
      * 获取黑板值
      *
@@ -258,15 +263,15 @@ export class AsyncNextStateMachine extends AsyncTask<IGameFramework.ITaskActuato
     }
 
     public async changeStateByInstane(newState: AsyncNextState): Promise<void> {
-      
+
     }
 
     public async changeStateByCtor(newState: new (...args: any) => AsyncNextState): Promise<void> {
-      
+
     }
 
     public async changeStateById(id: string | number): Promise<void> {
-      
+
     }
 
     public beforeStateChange(curr: IGameFramework.Nullable<AsyncNextState>, next: AsyncNextState): void {
