@@ -780,7 +780,7 @@ export class AssetService {
      * @memberof AssetService
      */
     public async getAssetAsync<T extends IGameFramework.Constructor<Asset>>(assetHandle: AssetHandle<T>): Promise<IGameFramework.Nullable<InstanceType<T>>> {
-        DEBUG && assert(!!assetHandle,"assetInfo is null");
+        DEBUG && assert(!!assetHandle, "assetInfo is null");
 
         const bundle = await this.getAsyncBundleUrl(assetHandle.bundle);
         if (!bundle) {

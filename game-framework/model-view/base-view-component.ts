@@ -4,6 +4,7 @@ import { UIService } from "../services/ui-service";
 import { BaseService } from "./base-service";
 import { type BaseView } from "./base-view";
 import { bindingAndFixSpecialShapedScreen } from "./binding-and-fix-special-shaped-screen";
+import { EventKeyboard } from "cc";
 const { ccclass, property, menu } = _decorator;
 
 /**
@@ -65,6 +66,16 @@ export abstract class BaseViewComponent<U extends BaseService, T extends BaseVie
 
     protected _fixSpecialShapedScreenHasCache = true;
 
+    public enableKeyboard() {
+        const uiService = Container.get(UIService)!;
+        uiService.enableKeyboard(this);
+    }
+
+    public disableKeyboard() {
+        const uiService = Container.get(UIService)!;
+        uiService.disableKeyboard(this);
+    }
+
     public set view(view: T) {
         this._view = view;
     }
@@ -113,6 +124,46 @@ export abstract class BaseViewComponent<U extends BaseService, T extends BaseVie
             this.onShow();
         }
     }
+
+     /**
+     * 键盘按下事件，总是从顶部面板往下传递
+     * 
+     * @example
+     * 
+     * ---root        4
+     *   ---panel1    3
+     *    ---panel2   2
+     *   ---panel3    1
+     *
+     * @protected
+     * @param {EventKeyboard} event
+     * @memberof BaseView
+     */
+     public onKeyDown(event: EventKeyboard): void {
+      
+     }
+ 
+     /**
+      * 键盘抬起事件，总是从顶部面板往下传递
+      *
+      * @public
+      * @param {EventKeyboard} event
+      * @memberof BaseView
+      */
+     public onKeyUp(event: EventKeyboard): void {
+ 
+     }
+ 
+     /**
+      * 键盘长按事件，总是从顶部面板往下传递
+      *
+      * @public
+      * @param {EventKeyboard} event
+      * @memberof BaseView
+      */
+     public onKeyPressing(event: EventKeyboard): void {
+ 
+     }
 
     /**
      * 预加载资源

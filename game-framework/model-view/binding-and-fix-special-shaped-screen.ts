@@ -1,11 +1,9 @@
-import { CCClass, CCObject, Component, Node, Rect, UITransform, Widget, assert, equals, screen } from "cc";
+import { CCClass, CCObject, Component, Node, Rect, UITransform, Widget, assert, equals, screen, sys } from "cc";
 import { DEBUG, EDITOR } from "cc/env";
 import { bfsGetFirstChildByName, getWindowSize, isChildClassOf } from "db://game-core/game-framework";
 import { type BaseService } from "./base-service";
 import { type BaseView } from "./base-view";
 import { type BaseViewComponent } from "./base-view-component";
-import { sys } from "cc";
-import { error } from "cc";
 
 const ignore = ["_name", "_objFlags", "__scriptAsset", "node", "_enabled", "__prefab", "__editorExtras__"];
 

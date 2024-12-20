@@ -112,6 +112,17 @@ export class SortedSet<T> {
         return null;
     }
 
+    public findIndex(cb: (e: T) => boolean): number {
+        for (let i = 0; i < this._length; ++i) {
+            let remove = cb(this._elements[i]);
+            if (remove) {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
     public remove(cb: (e: T) => boolean): IGameFramework.Nullable<T> {
         for (let i = 0; i < this._length; ++i) {
             let remove = cb(this._elements[i]);
@@ -173,6 +184,17 @@ export class SortedSet<T> {
         }
 
         return false;
+    }
+
+    /**
+     * 删除指定索引的元素
+     *
+     * @param {number} index
+     * @memberof SortedSet
+     */
+    public delete(index: number): void {
+        this._elements.splice(index, 1);
+        this._length--;
     }
 
     /**

@@ -1,10 +1,11 @@
-import { Asset, EventTouch, Layers, Node, Prefab, Rect, UITransform, Widget, _decorator, assert, find, js, sys } from "cc";
+import { Asset, EventKeyboard, EventTouch, Input, Layers, Node, Prefab, Rect, UITransform, Widget, _decorator, assert, find, input, js, sys } from "cc";
 import { DEBUG } from "cc/env";
-import { Container, isEmptyStr, logger } from "db://game-core/game-framework";
-import { BaseViewComponent } from "../model-view/base-view-component";
+import { Container, isChildClassOf, isEmptyStr, logger, utils } from "db://game-core/game-framework";
 import { EventDispatcher } from "../core/event-dispatcher";
 import { type BaseService } from "../model-view/base-service";
 import { type BaseView } from "../model-view/base-view";
+import { type BaseViewComponent } from "../model-view/base-view-component";
+import { SortedSet } from "../structures/sorted-set";
 import { AssetHandle, AssetService } from "./asset-service";
 
 type OnCloseReturn<T extends BaseView<U>, U extends BaseService> = IGameFramework.Nullable<ReturnType<T["onClose"]>>;
@@ -163,6 +164,8 @@ interface EventOverview {
     "touch-move": EventTouch;
 }
 
+type V = BaseView<BaseService> | BaseViewComponent<BaseService, BaseView<BaseService>>;
+
 @ccclass("UIService")
 export class UIService extends EventDispatcher<EventOverview> implements IGameFramework.ISingleton {
     private _loadService: AssetService = Container.get(AssetService)!;
@@ -175,6 +178,14 @@ export class UIService extends EventDispatcher<EventOverview> implements IGameFr
     private _popUp: Node = null!;
     private _other: Node = null!;
     private _root: Node = null!;
+
+    private _viewKeyboards: SortedSet<{ root: number, v: V }> = new SortedSet((a, b) => {
+        if (a.root == b.root) {
+            return b.v.node.getSiblingIndex() - a.v.node.getSiblingIndex();
+        } else {
+            return b.root - a.root;
+        }
+    });
 
     private _clickBgHandle: IGameFramework.Nullable<AssetHandle<typeof Prefab>> = null!;
 
@@ -201,6 +212,12 @@ export class UIService extends EventDispatcher<EventOverview> implements IGameFr
             this._touch.on(Node.EventType.TOUCH_END, this.onTouchEnd, this);
             this._touch.on(Node.EventType.TOUCH_CANCEL, this.onTouchEnd, this);
         }
+
+        if (utils.isPc) {
+            input.on(Input.EventType.KEY_DOWN, this.onKeyDown, this);
+            input.on(Input.EventType.KEY_UP, this.onKeyUp, this);
+            input.on(Input.EventType.KEY_PRESSING, this.onKeyPressing, this);
+        }
     }
 
     public onDestroy(): void {
@@ -211,6 +228,56 @@ export class UIService extends EventDispatcher<EventOverview> implements IGameFr
 
     }
     //#endregion
+
+    private onKeyDown(event: EventKeyboard): void {
+        for (let v of this._viewKeyboards) {
+            v.v.onKeyDown(event);
+            if (event.isStopped()) {
+                break;
+            }
+        }
+    }
+
+    private onKeyUp(event: EventKeyboard): void {
+        for (let v of this._viewKeyboards) {
+            v.v.onKeyUp(event);
+            if (event.isStopped()) {
+                break;
+            }
+        }
+    }
+
+    private onKeyPressing(event: EventKeyboard): void {
+        for (let v of this._viewKeyboards) {
+            v.v.onKeyPressing(event);
+            if (event.isStopped()) {
+                break;
+            }
+        }
+    }
+
+    public enableKeyboard(v: V): void {
+        let view: BaseView<BaseService> = v as BaseView<BaseService>;
+        if (isChildClassOf(v.constructor, "BaseViewComponent")) {
+            const comp = v as BaseViewComponent<BaseService, BaseView<BaseService>>;
+            view = comp.view;
+        }
+
+        const parent = view.node.parent;
+        if (!parent) return;
+        this._viewKeyboards.add({ root: utils.getDistanceToRoot(v.node), v });
+
+        v.node.on(Node.EventType.NODE_DESTROYED, () => {
+            this.disableKeyboard(v);
+        }, this);
+    }
+
+    public disableKeyboard(v: V): void {
+        const has = this._viewKeyboards.findIndex(e => e.v == v);
+        if (has > -1) {
+            this._viewKeyboards.delete(has);
+        }
+    }
 
     /**
      * 获取安全区域
@@ -427,6 +494,8 @@ export class UIService extends EventDispatcher<EventOverview> implements IGameFr
                 // 反而可能误用导致空指针异常
                 return view.isDisposed ? void 0 : view;
             } else {
+
+                logger.error(`${options.prefab} is not a BaseView`);
 
                 // 如果没有在主Prefab上找到BaseView。那么就直接销毁
                 ui.destroy();
