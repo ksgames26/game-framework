@@ -38,6 +38,7 @@ export * from "./model-view/misc";
 export * from "./model-view/state/view-state";
 
 // 工具
+export * from "./utils/timer";
 export * from "./utils/local-save";
 export * from "./utils/math";
 export * from "./utils/object-pool";
