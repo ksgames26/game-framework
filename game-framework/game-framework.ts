@@ -22,6 +22,10 @@ export * from "./services/ui-service";
 
 // 数据结构
 export * from "./structures/linked-list";
+export * from "./structures/sorted-set";
+export * from "./structures/byte";
+export * from "./structures/int64";
+export * from "./structures/poisson-disk-sampling";
 
 // 模型视图
 export * from "./model-view/base-service";

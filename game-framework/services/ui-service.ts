@@ -179,6 +179,14 @@ export class UIService extends EventDispatcher<EventOverview> implements IGameFr
     private _other: Node = null!;
     private _root: Node = null!;
 
+    public get enableUpdate() {
+        return false;
+    }
+
+    public get updateOrder() {
+        return 0;
+    }
+
     private _viewKeyboards: SortedSet<{ root: number, v: V }> = new SortedSet((a, b) => {
         if (a.root == b.root) {
             return b.v.node.getSiblingIndex() - a.v.node.getSiblingIndex();
