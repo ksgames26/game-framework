@@ -1,7 +1,7 @@
 import { assert, js } from "cc";
 import { DEBUG } from "cc/env";
 import { Container } from "db://game-core/game-framework";
-import { Byte } from "../structures/byte";
+import { Byte } from "db://game-core/game-framework";
 
 const enum PACKER {
     /**

@@ -2,7 +2,7 @@ import { EventTouch, Node, NodeEventType, Pool, assert, js } from "cc";
 import { DEBUG } from "cc/env";
 import { AsyncGeneratorMultipleCallsError, AsyncSet, AsyncTask, SyncTask, implementation, logger } from "db://game-core/game-framework";
 import { EventDispatcher } from "../core/event-dispatcher";
-import { SinglyLinkedList } from "../structures/linked-list";
+import { SinglyLinkedList } from "db://game-core/game-framework";
 
 /**
  * 可等待任务句柄
@@ -733,6 +733,14 @@ export class TaskService implements IGameFramework.ISingleton, IGameFramework.IT
         this._taskHandlePool = new Pool<TaskHandle<unknown>>(() => new TaskHandle<unknown>(), taskPoolSize, (handle) => {
             handle.dispose();
         });
+    }
+
+    public get enableUpdate() {
+        return false;
+    }
+
+    public get updateOrder() {
+        return 0;
     }
 
     onDestroy(): void { }

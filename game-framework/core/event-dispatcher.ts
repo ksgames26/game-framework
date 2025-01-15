@@ -1,6 +1,6 @@
 import { Component, Node } from "cc";
 import { fnEmpty, implementation, makeDeferred } from "db://game-core/game-framework";
-import { SortedSet } from "../structures/sorted-set";
+import { SortedSet } from "db://game-core/game-framework";
 import { ObjectPools } from "../utils/object-pool";
 
 class Listener implements IGameFramework.Listener, IGameFramework.IPoolObject {

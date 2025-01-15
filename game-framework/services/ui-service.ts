@@ -5,7 +5,7 @@ import { EventDispatcher } from "../core/event-dispatcher";
 import { type BaseService } from "../model-view/base-service";
 import { type BaseView } from "../model-view/base-view";
 import { type BaseViewComponent } from "../model-view/base-view-component";
-import { SortedSet } from "../structures/sorted-set";
+import { SortedSet } from "db://game-core/game-framework";
 import { AssetHandle, AssetService } from "./asset-service";
 
 type OnCloseReturn<T extends BaseView<U>, U extends BaseService> = IGameFramework.Nullable<ReturnType<T["onClose"]>>;
