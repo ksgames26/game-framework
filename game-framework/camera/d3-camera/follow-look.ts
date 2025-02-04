@@ -1,6 +1,5 @@
 import { Component, Node, Vec3, _decorator } from "cc";
 import { EDITOR } from "cc/env";
-import { logger } from "db://game-core/game-framework";
 const { ccclass, property } = _decorator;
 
 /**
