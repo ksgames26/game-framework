@@ -736,7 +736,7 @@ export class TaskService implements IGameFramework.ISingleton, IGameFramework.IT
     }
 
     public get enableUpdate() {
-        return false;
+        return true;
     }
 
     public get updateOrder() {
