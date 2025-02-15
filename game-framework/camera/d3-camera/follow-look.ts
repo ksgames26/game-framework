@@ -32,12 +32,12 @@ const { ccclass, property } = _decorator;
  */
 @ccclass("Camera/D3Camera/FollowLook")
 export class FollowLook extends Component {
-    @property private _lockAt: Node = null!;
+    @property private _lockAt: IGameFramework.Nullable<Node> = null!;
     @property({ type: Node, tooltip: EDITOR ? "跟随目标" : "" })
-    get lockAt(): Node {
+    get lockAt(): IGameFramework.Nullable<Node> {
         return this._lockAt;
     }
-    set lockAt(value: Node) {
+    set lockAt(value: IGameFramework.Nullable<Node>) {
         this._lockAt = value;
         if (value) {
             this.setupInitialPosition();
