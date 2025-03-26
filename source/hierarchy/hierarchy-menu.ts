@@ -1,6 +1,7 @@
 import { AssetInfo } from "@cocos/creator-types/editor/packages/asset-db/@types/public";
 import { readFileSync } from "fs";
-import { Project, Scope } from "ts-morph";
+import path from "path";
+import { Decorator, Project, Scope } from "ts-morph";
 
 const shortNames: Record<string, string> = {
     // UI 组件
@@ -71,12 +72,10 @@ function traversePrefabNode(node: any, prefab: any, types: any[]) {
                     const compInfo = prefab[compInfoID.__id__];
                     if (compInfo) {
                         isSameType(types, node._name);
-                        
+
                         types.push({
                             name: node._name,
-                            type: compInfo.__type__ && compInfo.__type__.startsWith('cc.') ?
-                                compInfo.__type__.split('.').pop() :
-                                compInfo.__type__
+                            type: compInfo.__type__
                         });
                         find = true;
                     }
@@ -94,9 +93,7 @@ function traversePrefabNode(node: any, prefab: any, types: any[]) {
 
                     types.push({
                         name: node._name,
-                        type: compInfo.__type__ && compInfo.__type__.startsWith('cc.') ?
-                            compInfo.__type__.split('.').pop() :
-                            compInfo.__type__,
+                        type: compInfo.__type__
                     });
 
                     // 只取第一个
@@ -152,108 +149,331 @@ async function generatorMembers(filePath: string, types: { name: string, type: s
     const classes = sourceFile.getClasses();
 
     // 遍历每个类
-    classes.forEach(classDeclaration => {
+    for (let i = 0; i < classes.length; i++) {
+        const classDeclaration = classes[i];
+
         // 获取类名
         const className = classDeclaration.getName();
-        // 获取所有属性声明
-        const properties = classDeclaration.getProperties();
 
-        // 过滤出以_开头的属性
-        const privateProps = properties.filter(prop => {
-            const name = prop.getName();
-            return name.startsWith('_');
-        });
+        // 先添加新的属性
+        for (let index = 0; index < types.length; index++) {
+            const typeDef = types[index];
+            if (!classDeclaration.getProperty(typeDef.name)) {
+                // 检查是否是自定义组件（非cc开头）
+                const isCustomComponent = !typeDef.type.startsWith('cc.');
+                let typeName = typeDef.type;
+                let modulePath = 'cc';
 
-        // 处理现有的属性
-        privateProps.forEach(prop => {
-            const name = prop.getName();
-            const type = prop.getType().getText();
-            const typeDef = types.find(item => item.name == name);
+                if (isCustomComponent) {
+                    const uuid = Editor.Utils.UUID.decompressUUID(typeDef.type);
+                    const assetInfo = await Editor.Message.request('asset-db', 'query-asset-info', uuid);
 
-            if (typeDef) {
-                // 如果类型定义和属性定义一致，则不输出
-                if (typeDef.name == name && typeDef.type == type) {
-                    return;
-                }
+                    if (assetInfo && assetInfo.file) {
 
-                // 移除所有现有的 property 装饰器
-                const decorators = prop.getDecorators();
-                decorators.forEach(decorator => {
-                    if (decorator.getName() === 'property') {
-                        decorator.remove();
+                        // 读取类找到导出
+                        const customComponentProject = new Project();
+                        const customComponentFile = customComponentProject.addSourceFileAtPath(assetInfo.file);
+                        
+                        // 获取文件中所有导出的类
+                        const exportedClasses = customComponentFile.getClasses().filter(c => c.isExported());
+                        
+                        // 如果有导出的类，使用第一个类的名称
+                        if (exportedClasses.length > 0) {
+                            typeName = exportedClasses[0].getName() || assetInfo.name;
+                            
+                            // 只使用文件名作为模块路径（不含扩展名）
+                            const fileDir = path.dirname(filePath);
+                            const relativePath = path.relative(fileDir, path.dirname(assetInfo.file));
+                            const fileNameWithoutExt = path.basename(assetInfo.file, path.extname(assetInfo.file));
+                            
+                            // 构建合适的导入路径
+                            if (relativePath === '') {
+                                modulePath = `./${fileNameWithoutExt}`;
+                            } else {
+                                modulePath = `${relativePath.replace(/\\/g, '/')}/${fileNameWithoutExt}`;
+                            }
+                            
+                            // 如果路径不是以./或../开头，添加./
+                            if (!/^\.\.?\//.test(modulePath)) {
+                                modulePath = `./${modulePath}`;
+                            }
+                            
+                        } else {
+                            // 如果没有找到导出的类，使用文件名
+                            console.warn(`No exported class found in ${assetInfo.file}, using asset name instead`);
+                            typeName = assetInfo.name;
+                            
+                            // 计算相对路径同上
+                            const fileDir = path.dirname(filePath);
+                            const relativePath = path.relative(fileDir, path.dirname(assetInfo.file));
+                            const fileNameWithoutExt = path.basename(assetInfo.file, path.extname(assetInfo.file));
+                            
+                            if (relativePath === '') {
+                                modulePath = `./${fileNameWithoutExt}`;
+                            } else {
+                                modulePath = `${relativePath.replace(/\\/g, '/')}/${fileNameWithoutExt}`;
+                            }
+                            
+                            if (!/^\.\.?\//.test(modulePath)) {
+                                modulePath = `./${modulePath}`;
+                            }
+                        }
                     }
-                });
-
-                // 添加新的装饰器和类型
-                prop.setType(typeDef.type);
-                prop.addDecorator({
-                    name: 'property',
-                    arguments: [`(${typeDef.type})`]
-                });
-
-                // 确保有初始值
-                if (!prop.getInitializer()) {
-                    prop.setInitializer('null');
+                } else {
+                    // cc组件只需要组件名
+                    typeName = typeDef.type.split('.').pop() || '';
                 }
-            }
-        });
 
-        // 检查是否有需要新增的属性
-        types.forEach(typeDef => {
-            // 如果属性不存在，则新增
-            if (!privateProps.some(prop => prop.getName() === typeDef.name)) {
-
-                // 添加新属性
                 classDeclaration.insertProperty(0, {
                     name: typeDef.name,
-                    type: typeDef.type,
+                    type: typeName,
                     initializer: "null",
                     decorators: [{
                         name: 'property',
-                        arguments: [`(${typeDef.type})`]
+                        arguments: [isCustomComponent ? typeName : `{type: ${typeName}}`]
                     }],
                     isReadonly: true,
                     scope: Scope.Private
                 });
-            }
-        });
 
-        // 检查并添加所需的导入
-        const neededImports = new Set<string>();
-        types.forEach(typeDef => {
-            if (typeDef.type !== 'string' &&
-                typeDef.type !== 'number' &&
-                typeDef.type !== 'boolean') {
-                neededImports.add(typeDef.type);
-            }
-        });
+                // 添加导入
+                if (isCustomComponent) {
+                    // 添加自定义组件的导入
+                    const existingImport = sourceFile.getImportDeclaration(i =>
+                        i.getModuleSpecifierValue() === modulePath
+                    );
 
-        // 添加缺失的导入
-        if (neededImports.size > 0) {
-            const existingImport = sourceFile.getImportDeclaration(i =>
-                i.getModuleSpecifierValue() === 'cc'
-            );
-
-            if (existingImport) {
-                // 添加到现有的导入声明中
-                const namedImports = existingImport.getNamedImports();
-                neededImports.forEach(type => {
-                    if (!namedImports.some(imp => imp.getName() === type)) {
-                        existingImport.addNamedImport(type);
+                    if (existingImport) {
+                        const namedImports = existingImport.getNamedImports();
+                        if (!namedImports.some(imp => imp.getName() === typeName)) {
+                            existingImport.addNamedImport(typeName);
+                        }
+                    } else {
+                        sourceFile.addImportDeclaration({
+                            namedImports: [typeName],
+                            moduleSpecifier: modulePath
+                        });
                     }
-                });
-            } else {
-                // 创建新的导入声明
-                sourceFile.addImportDeclaration({
-                    namedImports: Array.from(neededImports),
-                    moduleSpecifier: 'cc'
-                });
+                } else {
+                    // 添加 cc 组件导入
+                    const ccImport = sourceFile.getImportDeclaration(i => 
+                        i.getModuleSpecifierValue() === 'cc'
+                    );
+                    
+                    if (ccImport) {
+                        const namedImports = ccImport.getNamedImports();
+                        if (!namedImports.some(imp => imp.getName() === typeName)) {
+                            ccImport.addNamedImport(typeName);
+                        }
+                    } else {
+                        sourceFile.addImportDeclaration({
+                            namedImports: [typeName],
+                            moduleSpecifier: 'cc'
+                        });
+                    }
+                }
             }
         }
 
-        // 保存修改
-        project.saveSync();
-    });
+        // 获取所有私有属性
+        const privateProps = classDeclaration.getProperties().filter(prop =>
+            prop.getName().startsWith('_')
+        );
+
+        // 处理现有属性
+        for (let index = 0; index < privateProps.length; index++) {
+            const prop = privateProps[index];
+
+            const name = prop.getName();
+            const type = prop.getType().getText();
+            const typeDef = types.find(item => item.name === name);
+
+            if (typeDef) {
+                // 更新类型和装饰器
+                if (typeDef.type !== type) {
+                    // 检查是否是自定义组件
+                    const isCustomComponent = !typeDef.type.startsWith('cc.');
+                    let typeName = typeDef.type;
+                    let modulePath = 'cc';
+
+                    if (isCustomComponent) {
+                        const uuid = Editor.Utils.UUID.decompressUUID(typeDef.type);
+                        const assetInfo = await Editor.Message.request('asset-db', 'query-asset-info', uuid);
+    
+                        if (assetInfo && assetInfo.file) {
+                            // 读取类找到导出
+                            const customComponentProject = new Project();
+                            const customComponentFile = customComponentProject.addSourceFileAtPath(assetInfo.file);
+                            
+                            // 获取文件中所有导出的类
+                            const exportedClasses = customComponentFile.getClasses().filter(c => c.isExported());
+                            
+                            // 如果有导出的类，使用第一个类的名称
+                            if (exportedClasses.length > 0) {
+                                typeName = exportedClasses[0].getName() || assetInfo.name;
+                                
+                                // 只使用文件名作为模块路径（不含扩展名）
+                                const fileDir = path.dirname(filePath);
+                                const relativePath = path.relative(fileDir, path.dirname(assetInfo.file));
+                                const fileNameWithoutExt = path.basename(assetInfo.file, path.extname(assetInfo.file));
+                                
+                                // 构建合适的导入路径
+                                if (relativePath === '') {
+                                    modulePath = `./${fileNameWithoutExt}`;
+                                } else {
+                                    modulePath = `${relativePath.replace(/\\/g, '/')}/${fileNameWithoutExt}`;
+                                }
+                                
+                                // 如果路径不是以./或../开头，添加./
+                                if (!/^\.\.?\//.test(modulePath)) {
+                                    modulePath = `./${modulePath}`;
+                                }
+                            } else {
+                                // 如果没有找到导出的类，使用文件名
+                                typeName = assetInfo.name;
+                                
+                                // 计算相对路径同上
+                                const fileDir = path.dirname(filePath);
+                                const relativePath = path.relative(fileDir, path.dirname(assetInfo.file));
+                                const fileNameWithoutExt = path.basename(assetInfo.file, path.extname(assetInfo.file));
+                                
+                                if (relativePath === '') {
+                                    modulePath = `./${fileNameWithoutExt}`;
+                                } else {
+                                    modulePath = `${relativePath.replace(/\\/g, '/')}/${fileNameWithoutExt}`;
+                                }
+                                
+                                if (!/^\.\.?\//.test(modulePath)) {
+                                    modulePath = `./${modulePath}`;
+                                }
+                            }
+                        }
+                    } else {
+                        // cc组件只需要组件名
+                        typeName = typeDef.type.split('.').pop() || '';
+                    }
+
+                    const decorators = prop.getDecorators();
+                    let existingPropertyDecorator: Decorator | null = null;
+                    
+                    // 查找现有的 property 装饰器
+                    for (const decorator of decorators) {
+                        if (decorator.getName() === 'property') {
+                            existingPropertyDecorator = decorator;
+                            break;
+                        }
+                    }
+                    
+                    // 更新类型
+                    prop.setType(typeName);
+                    
+                    if (existingPropertyDecorator) {
+                        // 获取现有装饰器的参数文本
+                        const args = existingPropertyDecorator.getArguments();
+                        
+                        if (args.length > 0) {
+                            // 尝试解析现有参数
+                            const argText = args[0].getText();
+                            
+                            // 如果是对象形式的参数
+                            if (argText.startsWith('{') && argText.endsWith('}')) {
+                                // 提取对象内容，移除前后的花括号
+                                const objectContents = argText.substring(1, argText.length - 1).trim();
+                                
+                                // 检查是否有其他属性
+                                if (objectContents.includes(',') || !objectContents.includes('type:')) {
+                                    // 构建新的对象参数，包含原有属性和新的类型
+                                    let newArg = '{';
+                                    
+                                    // 处理已有属性
+                                    const properties = objectContents.split(',').map(p => p.trim());
+                                    const typeIndex = properties.findIndex(p => p.startsWith('type:'));
+                                    
+                                    if (typeIndex >= 0) {
+                                        // 替换类型属性
+                                        properties[typeIndex] = `type: ${typeName}`;
+                                    } else {
+                                        // 添加类型属性
+                                        properties.push(`type: ${typeName}`);
+                                    }
+                                    
+                                    newArg += properties.join(', ') + '}';
+                                    
+                                    // 更新装饰器
+                                    existingPropertyDecorator.removeArgument(0);
+                                    existingPropertyDecorator.addArgument(newArg);
+                                } else {
+                                    // 仅包含类型定义，更新类型
+                                    existingPropertyDecorator.removeArgument(0);
+                                    existingPropertyDecorator.addArgument(isCustomComponent ? typeName : `{type: ${typeName}}`);
+                                }
+                            } else {
+                                // 非对象形式参数，替换为新参数
+                                existingPropertyDecorator.removeArgument(0);
+                                existingPropertyDecorator.addArgument(isCustomComponent ? typeName : `{type: ${typeName}}`);
+                            }
+                        } else {
+                            // 没有参数，添加参数
+                            existingPropertyDecorator.addArgument(isCustomComponent ? typeName : `{type: ${typeName}}`);
+                        }
+                    } else {
+                        // 没有找到 property 装饰器，添加新装饰器
+                        prop.addDecorator({
+                            name: 'property',
+                            arguments: [isCustomComponent ? typeName : `{type: ${typeName}}`]
+                        });
+                    }
+
+                    if (!prop.getInitializer()) {
+                        prop.setInitializer('null');
+                    }
+                    
+                    // 添加导入
+                    if (isCustomComponent) {
+                        // 添加自定义组件的导入
+                        const existingImport = sourceFile.getImportDeclaration(i =>
+                            i.getModuleSpecifierValue() === modulePath
+                        );
+
+                        if (existingImport) {
+                            const namedImports = existingImport.getNamedImports();
+                            if (!namedImports.some(imp => imp.getName() === typeName)) {
+                                existingImport.addNamedImport(typeName);
+                            }
+                        } else {
+                            sourceFile.addImportDeclaration({
+                                namedImports: [typeName],
+                                moduleSpecifier: modulePath
+                            });
+                        }
+                    } else {
+                        // 添加 cc 组件导入
+                        const ccImport = sourceFile.getImportDeclaration(i => 
+                            i.getModuleSpecifierValue() === 'cc'
+                        );
+                        
+                        if (ccImport) {
+                            const namedImports = ccImport.getNamedImports();
+                            if (!namedImports.some(imp => imp.getName() === typeName)) {
+                                ccImport.addNamedImport(typeName);
+                            }
+                        } else {
+                            sourceFile.addImportDeclaration({
+                                namedImports: [typeName],
+                                moduleSpecifier: 'cc'
+                            });
+                        }
+                    }
+                }
+            } else {
+                // 如果在 types 中找不到对应的属性定义，则移除该属性
+                prop.remove();
+            }
+        }
+    }
+
+    // 保存修改
+    project.saveSync();
 }
 
 export function onRootMenu(assetInfo: AssetInfo & { components: any[], prefab: { assetUuid: string } }) {
