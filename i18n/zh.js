@@ -1,1 +1,12 @@
-"use strict";module.exports={description:"一份空白的扩展",show_log:"输出日志"};
+"use strict";
+module.exports={
+    hierarchy:{
+        menu:{
+            rootMenu:"构造视图成员"
+        },
+        error:{
+            noAssetInfo:"没有获取到资产信息",
+            noBaseView:"没有找到BaseView组件"
+        }
+    }
+};

@@ -6,7 +6,6 @@
     "author": "v",
     "editor": ">=3.8.3",
     "scripts": {
-        "preinstall": "node ./scripts/preinstall.js",
         "build": "tsc",
         "watch": "tsc -w"
     },
@@ -15,13 +14,20 @@
     "devDependencies": {
         "@cocos/creator-types": "^3.8.3",
         "@types/node": "^18.17.1",
-        "typescript": "^4.3.4"
+        "ts-morph": "^25.0.1",
+        "typescript": "^4.9.5"
     },
     "contributions": {
         "asset-db": {
             "mount": {
                 "path": "./game-framework",
                 "readonly": false
+            }
+        },
+        "hierarchy": {
+            "menu": {
+                "methods": "./dist/hierarchy/hierarchy-menu.js",
+                "rootMenu": "onRootMenu"
             }
         }
     }
