@@ -230,7 +230,7 @@ async function generatorMembers(filePath: string, types: { name: string, type: s
                     initializer: "null",
                     decorators: [{
                         name: 'property',
-                        arguments: [isCustomComponent ? typeName : `{type: ${typeName}}`]
+                        arguments: [`{type: ${typeName}}`]
                     }],
                     isReadonly: true,
                     scope: Scope.Private
@@ -405,22 +405,22 @@ async function generatorMembers(filePath: string, types: { name: string, type: s
                                 } else {
                                     // 仅包含类型定义，更新类型
                                     existingPropertyDecorator.removeArgument(0);
-                                    existingPropertyDecorator.addArgument(isCustomComponent ? typeName : `{type: ${typeName}}`);
+                                    existingPropertyDecorator.addArgument(`{type: ${typeName}}`);
                                 }
                             } else {
                                 // 非对象形式参数，替换为新参数
                                 existingPropertyDecorator.removeArgument(0);
-                                existingPropertyDecorator.addArgument(isCustomComponent ? typeName : `{type: ${typeName}}`);
+                                existingPropertyDecorator.addArgument(`{type: ${typeName}}`);
                             }
                         } else {
                             // 没有参数，添加参数
-                            existingPropertyDecorator.addArgument(isCustomComponent ? typeName : `{type: ${typeName}}`);
+                            existingPropertyDecorator.addArgument(`{type: ${typeName}}`);
                         }
                     } else {
                         // 没有找到 property 装饰器，添加新装饰器
                         prop.addDecorator({
                             name: 'property',
-                            arguments: [isCustomComponent ? typeName : `{type: ${typeName}}`]
+                            arguments: [`{type: ${typeName}}`]
                         });
                     }
 
