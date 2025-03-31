@@ -94,9 +94,9 @@ export class FollowLook extends Component {
         this._ollowDamping = value;
     }
 
-    private _targetPos: Vec3 = new Vec3();
-    private _currentPos: Vec3 = new Vec3();
-    private _offset: Vec3 = new Vec3();
+    protected _targetPos: Vec3 = new Vec3();
+    protected _currentPos: Vec3 = new Vec3();
+    protected _offset: Vec3 = new Vec3();
 
     protected start(): void {
         if (!this._lockAt) {
