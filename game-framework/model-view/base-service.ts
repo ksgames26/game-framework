@@ -16,7 +16,9 @@ export abstract class BaseService<E extends IGameFramework.EventOverview = { [ke
      * @type {AssetService}
      * @memberof BaseService
      */
-    public assetSvr: AssetService = Container.get(AssetService)!;
+    public get assetSvr(): AssetService {
+        return Container.get(AssetService)!;
+    }
 
     /**
      * UI管理引用
@@ -24,7 +26,9 @@ export abstract class BaseService<E extends IGameFramework.EventOverview = { [ke
      * @type {UIService}
      * @memberof BaseService
      */
-    public uiSvr: UIService = Container.get(UIService)!;
+    public get uiSvr(): UIService {
+        return Container.get(UIService)!;
+    }
 
     /**
      * 任务管理引用
@@ -32,5 +36,7 @@ export abstract class BaseService<E extends IGameFramework.EventOverview = { [ke
      * @type {TaskService}
      * @memberof BaseService
      */
-    public taskSvr: TaskService = Container.get(TaskService)!;
+    public get taskSvr(): TaskService {
+        return Container.get(TaskService)!;
+    }
 }

@@ -1,8 +1,7 @@
 import { EventTouch, Node, NodeEventType, Pool, assert, js } from "cc";
 import { DEBUG } from "cc/env";
-import { AsyncGeneratorMultipleCallsError, AsyncSet, AsyncTask, SyncTask, implementation, logger } from "db://game-core/game-framework";
+import { AsyncGeneratorMultipleCallsError, AsyncSet, AsyncTask, SinglyLinkedList, SyncTask, implementation, logger } from "db://game-core/game-framework";
 import { EventDispatcher } from "../core/event-dispatcher";
-import { SinglyLinkedList } from "db://game-core/game-framework";
 
 /**
  * 可等待任务句柄
@@ -155,6 +154,16 @@ export class TaskHandle<T> extends EventDispatcher<{ done: T }> implements IGame
         });
 
         return this;
+    }
+
+    /**
+     * 是否有效
+     *
+     * @return {*}  {boolean}
+     * @memberof TaskHandle
+     */
+    public isValid(): boolean {
+        return !!this._promise;
     }
 
     /**

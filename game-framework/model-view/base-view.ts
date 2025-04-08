@@ -1,6 +1,6 @@
 import { Component, Renderer, UITransform, Node, Widget, _decorator, easing, js, lerp } from "cc";
 import { DEBUG } from "cc/env";
-import { Container, isDestroyed, logger, secFrame } from "db://game-core/game-framework";
+import { AsyncTask, Container, isDestroyed, logger, secFrame } from "db://game-core/game-framework";
 import { getEventListeners } from "../core/decorators";
 import { AssetService } from "../services/asset-service";
 import { TaskService } from "../services/task-service";
@@ -18,7 +18,7 @@ enum PushPopState {
 
 @ccclass("BaseView")
 @menu("GameFramework/ViewState/BaseView")
-export abstract class BaseView<T extends BaseService> extends Component implements IGameFramework.IDisposable {
+export abstract class BaseView<T extends BaseService,S = any> extends Component implements IGameFramework.IDisposable {
 
     /**
      * 打开面板时候的参数
@@ -239,7 +239,7 @@ export abstract class BaseView<T extends BaseService> extends Component implemen
         getEventListeners(this).forEach((v, k) => {
             if (v.global) {
                 const dispatcher = Container.getInterface("IGameFramework.IEventDispatcher")!;
-                dispatcher.addListener(v.event, v.value, this, v.count);
+                dispatcher && dispatcher.addListener(v.event, v.value, this, v.count);
             } else {
                 this.service.addListener(v.event, v.value, this, v.count);
             }
@@ -248,9 +248,31 @@ export abstract class BaseView<T extends BaseService> extends Component implemen
         DEBUG && logger.log(`open view : ${this.viewName}`);
 
         // 等待一帧，让afterAddChild的里面Widget更新完毕
-        await Container.get(TaskService)!.waitNextFrame();
         // 要不然在afterAddChild里面调用onShow，如果此时使用某些API，比如UITransform.convertToWorldSpaceAR，会导致Widget没有更新完毕，导致位置错乱
-        await this.onShow();
+        await Container.get(TaskService)!.waitNextFrame();
+        
+        if (this.isDisposed) {
+            return;
+        }
+        
+        const hasTask = this.onShowStream();
+        if (!hasTask) {
+            await this.onShow();
+        } else {
+            const task = Container.get(TaskService)!;
+
+            // 如果onShowStream不为空，则不等待执行onShowSteram返回的任务
+            // 此时applyShow函数不等待返回。
+            // 调用者可以在onShowStream里面使用多任务来在无加载场景覆盖下做一些类似流式处理
+            task.runTask(hasTask).then(async () => {
+                if (this.isDisposed) {
+                    return;
+                }
+
+                // 执行任务完毕后可以调用onShow
+                await this.onShow();
+            });
+        }
 
         // 这里判断了当前面板还没有销毁
         if (!this.isDisposed) {
@@ -292,7 +314,7 @@ export abstract class BaseView<T extends BaseService> extends Component implemen
         getEventListeners(this).forEach((v, k) => {
             if (v.global) {
                 const dispatcher = Container.getInterface("IGameFramework.IEventDispatcher")!;
-                dispatcher.removeListener(v.event, v.value, this);
+                dispatcher && dispatcher.removeListener(v.event, v.value, this);
             } else {
                 this.service.removeListener(v.event, v.value, this);
             }
@@ -471,6 +493,17 @@ export abstract class BaseView<T extends BaseService> extends Component implemen
      */
     protected async onShow(): Promise<void> {
         return Promise.resolve();
+    }
+
+    /**
+     * 显示面板之后的处理
+     *
+     * @protected
+     * @return {*}  
+     * @memberof BaseView
+     */
+    protected onShowStream(): AsyncTask<S> | void {
+
     }
 
     /**

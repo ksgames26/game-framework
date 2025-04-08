@@ -197,6 +197,31 @@ class AssetHandle<T extends IGameFramework.Constructor<Asset>> {
     }
 
     /**
+     * 增加引用计数并安全获取资源
+     *
+     * @return {*}  {Promise<IGameFramework.Nullable<InstanceType<T>>>}
+     * @memberof AssetHandle
+     */
+    public async addRefAndSafeGetAsset(): Promise<IGameFramework.Nullable<InstanceType<T>>> {
+        this._ref++;
+        const asset = await this.safeGetAsset();
+        return asset;
+    }
+
+    /**
+     * 实例化资源
+     *
+     * @param {boolean} doDestroy 当引用为0的时候，是否销毁资源
+     * @param {boolean} auto 是否在node销毁的时候，减少引用计数
+     * @return {*}  {Node}
+     * @memberof AssetHandle
+     */
+    public instantiate(doDestroy: boolean = false, auto: boolean = true): Node {
+        const assetSvr = Container.get(AssetService)!;
+        return assetSvr.instantiateAsset(this as unknown as AssetHandle<typeof Prefab>, auto, doDestroy);
+    }
+
+    /**
      * 设置SpriteFrame
      *
      * @param {Sprite} spr
@@ -210,6 +235,42 @@ class AssetHandle<T extends IGameFramework.Constructor<Asset>> {
 
         const assetSvr = Container.get(AssetService)!;
         assetSvr.setSpriteFrame(spr, this as unknown as AssetHandle<typeof SpriteFrame>, doDestroy);
+    }
+
+    /**
+    * 安全获取资源
+    * 
+    * 如果资源正在加载，则等待加载完成
+    * 
+    * 如果资源没有加载，则开始加载
+    *
+    * @return {*}  {Promise<IGameFramework.Nullable<InstanceType<T>>>}
+    * @memberof AssetHandle
+    */
+    public async safeGetAsset(): Promise<IGameFramework.Nullable<InstanceType<T>>> {
+        let asset = this.getAsset();
+
+        // 没有获取到资源
+        if (!asset) {
+
+            // 有正在加载的任务
+            if (this.load) {
+
+                // 等待加载完成
+                await this.load;
+            } else {
+
+                // 没有正在加载的任务
+                // 则开始加载
+                await this.asyncLoad();
+            }
+
+            // 获取资源
+            asset = this.getAsset();
+        }
+
+        // else 获取到了资源，直接返回
+        return asset;
     }
 }
 
