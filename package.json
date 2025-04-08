@@ -1,34 +1,50 @@
 {
-    "$schema": "./@types/schema/package/index.json",
-    "package_version": 2,
-    "name": "game-framework",
-    "version": "1.0.0",
-    "author": "v",
-    "editor": ">=3.8.3",
-    "scripts": {
-        "build": "tsc",
-        "watch": "tsc -w"
-    },
-    "description": "i18n:game-core.description",
-    "main": "./dist/main.js",
-    "devDependencies": {
-        "@cocos/creator-types": "^3.8.3",
-        "@types/node": "^18.17.1",
-        "ts-morph": "^25.0.1",
-        "typescript": "^4.9.5"
-    },
-    "contributions": {
-        "asset-db": {
-            "mount": {
-                "path": "./game-framework",
-                "readonly": false
-            }
-        },
-        "hierarchy": {
-            "menu": {
-                "methods": "./dist/hierarchy/hierarchy-menu.js",
-                "rootMenu": "onRootMenu"
-            }
-        }
+  "$schema": "./@types/schema/package/index.json",
+  "package_version": 2,
+  "name": "game-framework",
+  "version": "1.0.0",
+  "author": "v",
+  "editor": ">=3.8.3",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w"
+  },
+  "description": "i18n:game-core.description",
+  "main": "./dist/main.js",
+  "devDependencies": {
+    "@cocos/creator-types": "^3.8.3",
+    "@types/node": "^18.17.1",
+    "ts-morph": "^25.0.1",
+    "typescript": "^4.9.5",
+    "vue": "^3.5.13"
+  },
+  "panels": {
+    "set-name": {
+      "title": "i18n:game-framework.panels.set_name",
+      "type": "dockable",
+      "main": "dist/panels/set-name",
+      "size": {
+        "min-width": 300,
+        "min-height": 300,
+        "width": 300,
+        "height": 300
+      }
     }
+  },
+  "contributions": {
+    "asset-db": {
+      "mount": {
+        "path": "./game-framework",
+        "readonly": false
+      }
+    },
+    "hierarchy": {
+      "menu": {
+        "methods": "./dist/hierarchy/hierarchy-menu.js",
+        "rootMenu": "onRootMenu",
+        "nodeMenu": "onNodeMenu"
+      }
+    }
+  },
+  "last_commit": "2025-03-26T13:22:58Z"
 }

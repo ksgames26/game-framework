@@ -174,6 +174,42 @@ class AssetHandle<T extends IGameFramework.Constructor<Asset>> {
     }
 
     /**
+     * 安全获取资源
+     * 
+     * 如果资源正在加载，则等待加载完成
+     * 
+     * 如果资源没有加载，则开始加载
+     *
+     * @return {*}  {Promise<IGameFramework.Nullable<InstanceType<T>>>}
+     * @memberof AssetHandle
+     */
+    public async safeGetAsset(): Promise<IGameFramework.Nullable<InstanceType<T>>> {
+        let asset = this.getAsset();
+
+        // 没有获取到资源
+        if (!asset) {
+
+            // 有正在加载的任务
+            if (this.load) {
+
+                // 等待加载完成
+                await this.load;
+            } else {
+
+                // 没有正在加载的任务
+                // 则开始加载
+                await this.asyncLoad();
+            }
+
+            // 获取资源
+            asset = this.getAsset();
+        }
+
+        // else 获取到了资源，直接返回
+        return asset;
+    }
+
+    /**
      * 异步加载当前资源
      *
      * @return {*}  {Promise<IGameFramework.Nullable<InstanceType<T>>>}
@@ -235,42 +271,6 @@ class AssetHandle<T extends IGameFramework.Constructor<Asset>> {
 
         const assetSvr = Container.get(AssetService)!;
         assetSvr.setSpriteFrame(spr, this as unknown as AssetHandle<typeof SpriteFrame>, doDestroy);
-    }
-
-    /**
-    * 安全获取资源
-    * 
-    * 如果资源正在加载，则等待加载完成
-    * 
-    * 如果资源没有加载，则开始加载
-    *
-    * @return {*}  {Promise<IGameFramework.Nullable<InstanceType<T>>>}
-    * @memberof AssetHandle
-    */
-    public async safeGetAsset(): Promise<IGameFramework.Nullable<InstanceType<T>>> {
-        let asset = this.getAsset();
-
-        // 没有获取到资源
-        if (!asset) {
-
-            // 有正在加载的任务
-            if (this.load) {
-
-                // 等待加载完成
-                await this.load;
-            } else {
-
-                // 没有正在加载的任务
-                // 则开始加载
-                await this.asyncLoad();
-            }
-
-            // 获取资源
-            asset = this.getAsset();
-        }
-
-        // else 获取到了资源，直接返回
-        return asset;
     }
 }
 

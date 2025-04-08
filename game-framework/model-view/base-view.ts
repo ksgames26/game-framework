@@ -1,4 +1,4 @@
-import { Component, Renderer, UITransform, Node, Widget, _decorator, easing, js, lerp } from "cc";
+import { Component, EventKeyboard, Node, Renderer, UITransform, Widget, _decorator, easing, js, lerp } from "cc";
 import { DEBUG } from "cc/env";
 import { AsyncTask, Container, isDestroyed, logger, secFrame } from "db://game-core/game-framework";
 import { getEventListeners } from "../core/decorators";
@@ -8,7 +8,8 @@ import { UIAnimaOpenMode, UIService, type OpenViewOptions } from "../services/ui
 import { type BaseService } from "./base-service";
 import { BaseViewComponent } from "./base-view-component";
 import { bindingAndFixSpecialShapedScreen } from "./binding-and-fix-special-shaped-screen";
-import { EventKeyboard } from "cc";
+
+
 
 const { ccclass, menu } = _decorator;
 
@@ -250,7 +251,6 @@ export abstract class BaseView<T extends BaseService,S = any> extends Component 
         // 等待一帧，让afterAddChild的里面Widget更新完毕
         // 要不然在afterAddChild里面调用onShow，如果此时使用某些API，比如UITransform.convertToWorldSpaceAR，会导致Widget没有更新完毕，导致位置错乱
         await Container.get(TaskService)!.waitNextFrame();
-        
         if (this.isDisposed) {
             return;
         }
@@ -415,7 +415,7 @@ export abstract class BaseView<T extends BaseService,S = any> extends Component 
      * @memberof BaseView
      */
     public onKeyDown(event: EventKeyboard): void {
-      
+
     }
 
     /**

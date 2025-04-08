@@ -1,7 +1,8 @@
 import { EventTouch, Node, NodeEventType, Pool, assert, js } from "cc";
 import { DEBUG } from "cc/env";
-import { AsyncGeneratorMultipleCallsError, AsyncSet, AsyncTask, SinglyLinkedList, SyncTask, implementation, logger } from "db://game-core/game-framework";
+import { AsyncGeneratorMultipleCallsError, AsyncSet, AsyncTask, SyncTask, implementation, logger } from "db://game-core/game-framework";
 import { EventDispatcher } from "../core/event-dispatcher";
+import { SinglyLinkedList } from "db://game-core/game-framework";
 
 /**
  * 可等待任务句柄
@@ -137,6 +138,16 @@ export class TaskHandle<T> extends EventDispatcher<{ done: T }> implements IGame
     }
 
     /**
+     * 是否有效
+     *
+     * @return {*}  {boolean}
+     * @memberof TaskHandle
+     */
+    public isValid(): boolean {
+        return !!this._promise;
+    }
+
+    /**
      * 重置任务
      *
      * @param {IGameFramework.Nullable<IGameFramework.ITask<T>>} [task]
@@ -154,16 +165,6 @@ export class TaskHandle<T> extends EventDispatcher<{ done: T }> implements IGame
         });
 
         return this;
-    }
-
-    /**
-     * 是否有效
-     *
-     * @return {*}  {boolean}
-     * @memberof TaskHandle
-     */
-    public isValid(): boolean {
-        return !!this._promise;
     }
 
     /**
@@ -396,6 +397,7 @@ export class TaskHandle<T> extends EventDispatcher<{ done: T }> implements IGame
  * @implements {ITask}
  */
 class WaitDelayFrame<T> extends SyncTask<T> implements IGameFramework.ITask<T> {
+    
     public constructor(
         runtime: IGameFramework.ITaskRuntime,
         private _frame: number,

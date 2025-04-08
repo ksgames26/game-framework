@@ -2,11 +2,18 @@
 module.exports={
     hierarchy:{
         menu:{
-            rootMenu:"构造视图成员"
+            rootMenu:"构造视图成员",
+            nodeMenu:"成员命名"
         },
         error:{
             noAssetInfo:"没有获取到资产信息",
             noBaseView:"没有找到BaseView组件"
+        },
+        nodeMenu:{
+            setName:"成员命名"
         }
+    },
+    panels:{
+        setName:"成员命名"
     }
 };

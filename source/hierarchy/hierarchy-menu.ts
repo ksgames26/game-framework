@@ -2,48 +2,7 @@ import { AssetInfo } from "@cocos/creator-types/editor/packages/asset-db/@types/
 import { readFileSync } from "fs";
 import path from "path";
 import { Decorator, Project, Scope } from "ts-morph";
-
-const shortNames: Record<string, string> = {
-    // UI 组件
-    'lab': 'cc.Label',                // 文本
-    'btn': 'cc.Button',               // 按钮
-    'spr': 'cc.Sprite',               // 精灵
-    'scr': 'cc.ScrollView',           // 滚动视图
-    'lay': 'cc.Layout',               // 布局
-    'tog': 'cc.Toggle',               // 开关
-    'edt': 'cc.EditBox',              // 输入框
-    'rtx': 'cc.RichText',             // 富文本
-    'pgv': 'cc.PageView',             // 页面视图
-    'prg': 'cc.ProgressBar',          // 进度条
-    'sld': 'cc.Slider',               // 滑动器
-    'msk': 'cc.Mask',                 // 遮罩
-    'wgt': 'cc.Widget',               // 适配组件
-    'uit': 'cc.UITransform',          // UI变换
-
-    // 多媒体组件
-    'ani': 'cc.Animation',            // 动画
-    'aud': 'cc.AudioSource',          // 音频
-    'vid': 'cc.VideoPlayer',          // 视频
-    'wbv': 'cc.WebView',              // 网页视图
-
-    // 渲染相关
-    'cam': 'cc.Camera',               // 相机
-    'gfx': 'cc.Graphics',             // 图形
-    'pts': 'cc.ParticleSystem',       // 粒子系统
-    'lit': 'cc.LightComponent',       // 灯光
-    'mdl': 'cc.ModelComponent',       // 模型
-
-    // 动画相关
-    'skl': 'cc.Skeleton',             // 骨骼
-    'ast': 'cc.AnimationState',       // 动画状态
-    'acl': 'cc.AnimationClip',        // 动画片段
-    'anc': 'cc.AnimationController',  // 动画控制器
-
-    // 其他
-    'cvs': 'cc.Canvas',               // 画布
-    'sfa': 'cc.SafeArea',             // 安全区域
-    'bie': 'cc.BlockInputEvents'      // 输入阻挡
-};
+import { shortNames } from "../short-name";
 
 function isSameType(types: { name: string, type: string }[], name: string) {
     // 检查是否已经存在同名节点
@@ -54,7 +13,97 @@ function isSameType(types: { name: string, type: string }[], name: string) {
     }
 }
 
-function traversePrefabNode(node: any, prefab: any, types: any[]) {
+async function traversePrefabNode(node: any, prefab: any, types: any[]) {
+
+    // 需要先检测这个node是否是预制体
+    // 如果是预制体，则需要遍历预制体
+    const prefabId = node._prefab.__id__;
+    const prefabInfo = prefab[prefabId];
+    const isPrefab = prefabInfo.asset && prefabInfo.asset.__uuid__;
+    if (isPrefab) {
+        const nodeInfo = await Editor.Message.request('asset-db', 'query-asset-info', isPrefab);
+
+        if (nodeInfo && nodeInfo.file) {
+            const prefabContent = readFileSync(nodeInfo!.file, 'utf-8');
+            try {
+                const prefab1 = JSON.parse(prefabContent);
+                const dataId = prefab1[0] && prefab1[0]?.data?.__id__;
+                const isNode = prefab1[dataId] && prefab1[dataId]?.__type__ == "cc.Node";
+
+                if (isNode) {
+                    await traversePrefabNode(prefab1[dataId], prefab1, types);
+                }
+            } catch (error) {
+                console.error('Failed to parse prefab content:', error);
+            }
+        }
+
+        // 如果遍历完了，看看预制体的属性重载
+        const instanceID = prefabInfo.instance && prefabInfo.instance.__id__;
+        const instance = prefab[instanceID];
+
+        if (instance) {
+
+            // 重载属性
+            const propertyOverrides = instance.propertyOverrides;
+            if (propertyOverrides && Array.isArray(propertyOverrides) && propertyOverrides.length > 0) {
+                for (let i = 0; i < propertyOverrides.length; i++) {
+                    const propertyOverride = propertyOverrides[i];
+                    const override = prefab[propertyOverride.__id__];
+
+                    if (override && override.__type__ == "CCPropertyOverrideInfo") {
+                        const propertyPath = override.propertyPath as string[];
+                        const value = override.value;
+
+                        if (propertyPath && propertyPath.length > 0) {
+                            const index = propertyPath.findIndex(e => e == "_name");
+                            if (index != -1) {
+                                const name = value;
+
+                                for (const o in shortNames) {
+                                    if (name.startsWith("_" + o)) {
+                                        isSameType(types, name);
+
+                                        types.push({
+                                            name: name,
+                                            type: shortNames[o]
+                                        });
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 扩展节点
+            const mountedChildren = instance.mountedChildren;
+            if (mountedChildren && Array.isArray(mountedChildren) && mountedChildren.length > 0) {
+                for (let i = 0; i < mountedChildren.length; i++) {
+                    const child = mountedChildren[i];
+                    const childInfo = prefab[child.__id__];
+                    const nodes = childInfo.nodes;
+                    if (nodes && Array.isArray(nodes) && nodes.length > 0) {
+                        for (let j = 0; j < nodes.length; j++) {
+                            const node = nodes[j];
+                            const nodeInfo = prefab[node.__id__];
+                            if (nodeInfo.__type__ == "cc.Node") {
+                                await traversePrefabNode(nodeInfo, prefab, types);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return;
+    }
+
+    if (!node._name) {
+        return;
+    }
+
+    // 如果是节点，则需要遍历节点
     if (node._name.startsWith('_')) {
         const components = node._components;
         const name = node._name ?? "";
@@ -104,12 +153,14 @@ function traversePrefabNode(node: any, prefab: any, types: any[]) {
     }
 
     if (node._children && Array.isArray(node._children) && node._children.length > 0) {
-        node._children.forEach((child: any) => {
+        for (let i = 0; i < node._children.length; i++) {
+            const child = node._children[i];
+
             const childInfo = prefab[child.__id__];
             if (childInfo.__type__ == "cc.Node") {
-                traversePrefabNode(childInfo, prefab, types);
+                await traversePrefabNode(childInfo, prefab, types);
             }
-        });
+        }
     }
 }
 
@@ -125,7 +176,7 @@ async function findNodesWithUnderscorePrefix(assetInfo: AssetInfo & { prefab: { 
                 const prefab = JSON.parse(prefabContent);
                 const node = prefab.find((item: any) => item._name == assetInfo.name && item.__type__ == "cc.Node");
                 if (node) {
-                    traversePrefabNode(node, prefab, types);
+                    await traversePrefabNode(node, prefab, types);
                     return types;
                 }
             } catch (error) {
@@ -173,47 +224,47 @@ async function generatorMembers(filePath: string, types: { name: string, type: s
                         // 读取类找到导出
                         const customComponentProject = new Project();
                         const customComponentFile = customComponentProject.addSourceFileAtPath(assetInfo.file);
-                        
+
                         // 获取文件中所有导出的类
                         const exportedClasses = customComponentFile.getClasses().filter(c => c.isExported());
-                        
+
                         // 如果有导出的类，使用第一个类的名称
                         if (exportedClasses.length > 0) {
                             typeName = exportedClasses[0].getName() || assetInfo.name;
-                            
+
                             // 只使用文件名作为模块路径（不含扩展名）
                             const fileDir = path.dirname(filePath);
                             const relativePath = path.relative(fileDir, path.dirname(assetInfo.file));
                             const fileNameWithoutExt = path.basename(assetInfo.file, path.extname(assetInfo.file));
-                            
+
                             // 构建合适的导入路径
                             if (relativePath === '') {
                                 modulePath = `./${fileNameWithoutExt}`;
                             } else {
                                 modulePath = `${relativePath.replace(/\\/g, '/')}/${fileNameWithoutExt}`;
                             }
-                            
+
                             // 如果路径不是以./或../开头，添加./
                             if (!/^\.\.?\//.test(modulePath)) {
                                 modulePath = `./${modulePath}`;
                             }
-                            
+
                         } else {
                             // 如果没有找到导出的类，使用文件名
                             console.warn(`No exported class found in ${assetInfo.file}, using asset name instead`);
                             typeName = assetInfo.name;
-                            
+
                             // 计算相对路径同上
                             const fileDir = path.dirname(filePath);
                             const relativePath = path.relative(fileDir, path.dirname(assetInfo.file));
                             const fileNameWithoutExt = path.basename(assetInfo.file, path.extname(assetInfo.file));
-                            
+
                             if (relativePath === '') {
                                 modulePath = `./${fileNameWithoutExt}`;
                             } else {
                                 modulePath = `${relativePath.replace(/\\/g, '/')}/${fileNameWithoutExt}`;
                             }
-                            
+
                             if (!/^\.\.?\//.test(modulePath)) {
                                 modulePath = `./${modulePath}`;
                             }
@@ -227,7 +278,7 @@ async function generatorMembers(filePath: string, types: { name: string, type: s
                 classDeclaration.insertProperty(0, {
                     name: typeDef.name,
                     type: typeName,
-                    initializer: "null",
+                    initializer: "null!",
                     decorators: [{
                         name: 'property',
                         arguments: [`{type: ${typeName}}`]
@@ -256,10 +307,10 @@ async function generatorMembers(filePath: string, types: { name: string, type: s
                     }
                 } else {
                     // 添加 cc 组件导入
-                    const ccImport = sourceFile.getImportDeclaration(i => 
+                    const ccImport = sourceFile.getImportDeclaration(i =>
                         i.getModuleSpecifierValue() === 'cc'
                     );
-                    
+
                     if (ccImport) {
                         const namedImports = ccImport.getNamedImports();
                         if (!namedImports.some(imp => imp.getName() === typeName)) {
@@ -299,31 +350,31 @@ async function generatorMembers(filePath: string, types: { name: string, type: s
                     if (isCustomComponent) {
                         const uuid = Editor.Utils.UUID.decompressUUID(typeDef.type);
                         const assetInfo = await Editor.Message.request('asset-db', 'query-asset-info', uuid);
-    
+
                         if (assetInfo && assetInfo.file) {
                             // 读取类找到导出
                             const customComponentProject = new Project();
                             const customComponentFile = customComponentProject.addSourceFileAtPath(assetInfo.file);
-                            
+
                             // 获取文件中所有导出的类
                             const exportedClasses = customComponentFile.getClasses().filter(c => c.isExported());
-                            
+
                             // 如果有导出的类，使用第一个类的名称
                             if (exportedClasses.length > 0) {
                                 typeName = exportedClasses[0].getName() || assetInfo.name;
-                                
+
                                 // 只使用文件名作为模块路径（不含扩展名）
                                 const fileDir = path.dirname(filePath);
                                 const relativePath = path.relative(fileDir, path.dirname(assetInfo.file));
                                 const fileNameWithoutExt = path.basename(assetInfo.file, path.extname(assetInfo.file));
-                                
+
                                 // 构建合适的导入路径
                                 if (relativePath === '') {
                                     modulePath = `./${fileNameWithoutExt}`;
                                 } else {
                                     modulePath = `${relativePath.replace(/\\/g, '/')}/${fileNameWithoutExt}`;
                                 }
-                                
+
                                 // 如果路径不是以./或../开头，添加./
                                 if (!/^\.\.?\//.test(modulePath)) {
                                     modulePath = `./${modulePath}`;
@@ -331,18 +382,18 @@ async function generatorMembers(filePath: string, types: { name: string, type: s
                             } else {
                                 // 如果没有找到导出的类，使用文件名
                                 typeName = assetInfo.name;
-                                
+
                                 // 计算相对路径同上
                                 const fileDir = path.dirname(filePath);
                                 const relativePath = path.relative(fileDir, path.dirname(assetInfo.file));
                                 const fileNameWithoutExt = path.basename(assetInfo.file, path.extname(assetInfo.file));
-                                
+
                                 if (relativePath === '') {
                                     modulePath = `./${fileNameWithoutExt}`;
                                 } else {
                                     modulePath = `${relativePath.replace(/\\/g, '/')}/${fileNameWithoutExt}`;
                                 }
-                                
+
                                 if (!/^\.\.?\//.test(modulePath)) {
                                     modulePath = `./${modulePath}`;
                                 }
@@ -355,7 +406,7 @@ async function generatorMembers(filePath: string, types: { name: string, type: s
 
                     const decorators = prop.getDecorators();
                     let existingPropertyDecorator: Decorator | null = null;
-                    
+
                     // 查找现有的 property 装饰器
                     for (const decorator of decorators) {
                         if (decorator.getName() === 'property') {
@@ -363,32 +414,32 @@ async function generatorMembers(filePath: string, types: { name: string, type: s
                             break;
                         }
                     }
-                    
+
                     // 更新类型
                     prop.setType(typeName);
-                    
+
                     if (existingPropertyDecorator) {
                         // 获取现有装饰器的参数文本
                         const args = existingPropertyDecorator.getArguments();
-                        
+
                         if (args.length > 0) {
                             // 尝试解析现有参数
                             const argText = args[0].getText();
-                            
+
                             // 如果是对象形式的参数
                             if (argText.startsWith('{') && argText.endsWith('}')) {
                                 // 提取对象内容，移除前后的花括号
                                 const objectContents = argText.substring(1, argText.length - 1).trim();
-                                
+
                                 // 检查是否有其他属性
                                 if (objectContents.includes(',') || !objectContents.includes('type:')) {
                                     // 构建新的对象参数，包含原有属性和新的类型
                                     let newArg = '{';
-                                    
+
                                     // 处理已有属性
                                     const properties = objectContents.split(',').map(p => p.trim());
                                     const typeIndex = properties.findIndex(p => p.startsWith('type:'));
-                                    
+
                                     if (typeIndex >= 0) {
                                         // 替换类型属性
                                         properties[typeIndex] = `type: ${typeName}`;
@@ -396,9 +447,9 @@ async function generatorMembers(filePath: string, types: { name: string, type: s
                                         // 添加类型属性
                                         properties.push(`type: ${typeName}`);
                                     }
-                                    
+
                                     newArg += properties.join(', ') + '}';
-                                    
+
                                     // 更新装饰器
                                     existingPropertyDecorator.removeArgument(0);
                                     existingPropertyDecorator.addArgument(newArg);
@@ -427,7 +478,7 @@ async function generatorMembers(filePath: string, types: { name: string, type: s
                     if (!prop.getInitializer()) {
                         prop.setInitializer('null');
                     }
-                    
+
                     // 添加导入
                     if (isCustomComponent) {
                         // 添加自定义组件的导入
@@ -448,10 +499,10 @@ async function generatorMembers(filePath: string, types: { name: string, type: s
                         }
                     } else {
                         // 添加 cc 组件导入
-                        const ccImport = sourceFile.getImportDeclaration(i => 
+                        const ccImport = sourceFile.getImportDeclaration(i =>
                             i.getModuleSpecifierValue() === 'cc'
                         );
-                        
+
                         if (ccImport) {
                             const namedImports = ccImport.getNamedImports();
                             if (!namedImports.some(imp => imp.getName() === typeName)) {
@@ -465,13 +516,25 @@ async function generatorMembers(filePath: string, types: { name: string, type: s
                         }
                     }
                 }
-            } else {
-                // 如果在 types 中找不到对应的属性定义，则移除该属性
-                prop.remove();
+            }
+            else {
+                // 先看看是不是property装饰器
+                const decorators = prop.getDecorators();
+                let existingPropertyDecorator: Decorator | null = null;
+
+                for (const decorator of decorators) {
+                    if (decorator.getName() === 'property') {
+                        existingPropertyDecorator = decorator;
+                        break;
+                    }
+                }
+
+                if (existingPropertyDecorator) {
+                    prop.remove();
+                }
             }
         }
     }
-
     // 保存修改
     project.saveSync();
 }
@@ -528,3 +591,19 @@ export function onRootMenu(assetInfo: AssetInfo & { components: any[], prefab: {
         },
     ];
 };
+
+export function onNodeMenu(node: AssetInfo) {
+    return [
+        {
+            label: 'i18n:game-framework.hierarchy.menu.nodeMenu',
+            async click() {
+
+                if (!node || !node.uuid || node.type !== "cc.Node") {
+                    return;
+                }
+
+                Editor.Panel.open('game-framework.set-name', node.uuid);
+            }
+        },
+    ];
+}
