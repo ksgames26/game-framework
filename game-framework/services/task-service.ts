@@ -1,8 +1,7 @@
 import { EventTouch, Node, NodeEventType, Pool, assert, js } from "cc";
 import { DEBUG } from "cc/env";
-import { AsyncGeneratorMultipleCallsError, AsyncSet, AsyncTask, SyncTask, implementation, logger } from "db://game-core/game-framework";
+import { AsyncGeneratorMultipleCallsError, AsyncSet, AsyncTask, SinglyLinkedList, SyncTask, implementation, logger } from "db://game-core/game-framework";
 import { EventDispatcher } from "../core/event-dispatcher";
-import { SinglyLinkedList } from "db://game-core/game-framework";
 
 /**
  * 可等待任务句柄
@@ -397,7 +396,7 @@ export class TaskHandle<T> extends EventDispatcher<{ done: T }> implements IGame
  * @implements {ITask}
  */
 class WaitDelayFrame<T> extends SyncTask<T> implements IGameFramework.ITask<T> {
-    
+
     public constructor(
         runtime: IGameFramework.ITaskRuntime,
         private _frame: number,
@@ -438,8 +437,14 @@ class WaitUntil<T> extends SyncTask<T> implements IGameFramework.ITask<T> {
     }
 }
 
-
-
+/**
+ * 延迟一定时间
+ *
+ * @class WaitDealy
+ * @extends {AsyncTask<T>}
+ * @implements {IGameFramework.IAsyncTask<T>}
+ * @template T
+ */
 class WaitDealy<T> extends AsyncTask<T> implements IGameFramework.IAsyncTask<T> {
     private _start: number = 0;
 
@@ -477,6 +482,42 @@ class WaitDealy<T> extends AsyncTask<T> implements IGameFramework.IAsyncTask<T> 
     }
 };
 
+/**
+ * 帧更新
+ *
+ * @class FrameUpdate
+ * @extends {AsyncTask<T>}
+ * @implements {IGameFramework.IAsyncTask<T>}
+ * @template T
+ */
+class FrameUpdate<T> extends AsyncTask<T> implements IGameFramework.IAsyncTask<T> {
+    public constructor(
+        runtime: IGameFramework.ITaskRuntime,
+        private _callback: () => void,
+        private _callee: unknown,
+        token?: IGameFramework.ICancellationToken
+    ) {
+        super(runtime, token);
+    }
+
+    public override async *task(): IGameFramework.Nullable<AsyncGenerator<T>> {
+        yield await new Promise<T>(resolve => {
+            this._resolve = resolve;
+        });
+    }
+
+    public update(): void {
+        if (this._resolve == null) return;
+
+        if (this.isCancellationRequested) {
+            this._resolve && this._resolve(0 as T);
+            this._resolve = null;
+            return;
+        }
+
+        this._callback.call(this._callee);
+    }
+};
 
 /**
  * 循环帧数迭代
@@ -1001,6 +1042,21 @@ export class TaskService implements IGameFramework.ISingleton, IGameFramework.IT
      */
     public loopFrameAsyncIter(frame: number, token?: IGameFramework.ICancellationToken): IGameFramework.ITaskHandle<number> {
         let task = this.get().reset(new LoopFrame(this, frame, token)) as TaskHandle<number>;
+        this._running.push(task as TaskHandle<unknown>);
+        return task;
+    }
+
+    /**
+     * 每帧更新
+     * 
+     * @param {() => void} callback
+     * @param {unknown} callee
+     * @param {IGameFramework.ICancellationToken} [token]
+     * @return {*}  {IGameFramework.ITaskHandle<void>}
+     * @memberof TaskService
+     */
+    public frameLoopTask(callback: () => void, callee: unknown, token?: IGameFramework.ICancellationToken): IGameFramework.ITaskHandle<void> {
+        let task = this.get().reset(new FrameUpdate(this, callback, callee, token)) as TaskHandle<void>;
         this._running.push(task as TaskHandle<unknown>);
         return task;
     }
