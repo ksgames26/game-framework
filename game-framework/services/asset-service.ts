@@ -28,8 +28,8 @@ class AssetHandle<T extends IGameFramework.Constructor<Asset>> {
      * 资源引用计数
      */
     private _ref: number = 0;
-    private _hash: number = 0;
     private _loadP: IGameFramework.Nullable<Promise<Asset>>;
+    private readonly _hash: number | string = 0;
 
     /**
      * 不允许在外部创建AssetHandle
@@ -50,7 +50,16 @@ class AssetHandle<T extends IGameFramework.Constructor<Asset>> {
          * 资源路径
          */
         public path: string = "",
-    ) { }
+
+        /**
+         * 资源hash
+         * 
+         * 如果传入，则不会重新计算hash
+         */
+        hash: number | string
+    ) {
+        this._hash = hash;
+    }
 
     /**
      * 是否是目录资源
@@ -144,10 +153,7 @@ class AssetHandle<T extends IGameFramework.Constructor<Asset>> {
      * @return {*}  {number}
      * @memberof AssetHandle
      */
-    public hashCode(): number {
-        if (this._hash == 0) {
-            this._hash = murmurhash2_32_gc(`${this.bundle}:${this.path}:${js.getClassName(this.type)}`, 0x234);
-        }
+    public hashCode(): number | string {
         return this._hash;
     }
 
@@ -330,7 +336,7 @@ export class MultiAssetsHandle {
  *
  * @class AsyncLoadDelegate
  */
-export class AsyncLoadDelegate<T extends number> extends AsyncTask<T> implements IGameFramework.IAsyncTask<T> {
+export class AsyncLoadDelegate<T extends { name: string, progress: number }> extends AsyncTask<T> implements IGameFramework.IAsyncTask<T> {
     private _bundleUrls: Set<string> = new Set<string>();
     private _assets: AssetHandle<typeof Asset>[] = [];
 
@@ -381,9 +387,14 @@ export class AsyncLoadDelegate<T extends number> extends AsyncTask<T> implements
         let count = 0.1;
         let doFlag = true;
         let completeOrError = false;
+
+        let info = `正在加载${assetInfo.path}目录`;
+
         bundle.loadDir(assetInfo.path, (finished: number, total: number, item: AssetManager.RequestItem) => {
             count = total;
             progress = finished;
+
+            info = `正在加载${this.getInfoName(item)}`;
         }, (err, data) => {
             completeOrError = true;
             if (err) {
@@ -394,9 +405,9 @@ export class AsyncLoadDelegate<T extends number> extends AsyncTask<T> implements
         const tasks = Container.get(TaskService)!;
         while (doFlag) {
             let handle = tasks.waitNextFrame<T>();
-            let value = 0 as T;
+            let value = { name: info, progress: 0 } as T;
             if (count != 0) {
-                value = (progress / count) as T;
+                value = { name: info, progress: progress / count } as T;
             }
             if (progress >= count && completeOrError) {
                 doFlag = false;
@@ -419,7 +430,12 @@ export class AsyncLoadDelegate<T extends number> extends AsyncTask<T> implements
         let progress = 0;
         let count = 0;
         let doFlag = true;
+
+        let info = "正在加载[bundle]: ";
+
         for (const bundleUrl of this._bundleUrls) {
+
+            info = `正在加载[bundle]: ${bundleUrl}`;
             let bundle = assetManager.getBundle(bundleUrl) as IGameFramework.Nullable<AssetManager.Bundle>;
             if (!bundle) {
                 count++;
@@ -436,9 +452,9 @@ export class AsyncLoadDelegate<T extends number> extends AsyncTask<T> implements
         while (doFlag) {
             let handle = tasks.waitNextFrame<T>();
 
-            let value = 0 as T;
+            let value = { name: info, progress: 0 } as T;
             if (count != 0) {
-                value = (progress / count) as T;
+                value = { name: info, progress: progress / count } as T;
             }
 
             if (progress >= count) {
@@ -464,7 +480,10 @@ export class AsyncLoadDelegate<T extends number> extends AsyncTask<T> implements
         let allComplete = false;
         let assets = new Map<string, { finished: number, total: number, done: boolean }>();
 
-        for (const asset of this._assets) {
+        let info = "正在加载[assets]: ";
+        const _assets = this._assets;
+        for (let i = 0; i < _assets.length; i++) {
+            const asset = _assets[i];
             let bundle = assetManager.getBundle(asset.bundle) as AssetManager.Bundle;
 
             // 加载文件夹
@@ -477,12 +496,14 @@ export class AsyncLoadDelegate<T extends number> extends AsyncTask<T> implements
 
                     // 这里的finished和total并不是一开始就是确定的
                     // 每次回调都会不断地更新
-                    const info = assets.get(asset.bundle)!;
-                    info.finished = finished;
-                    info.total = total;
+                    const itemInfo = assets.get(asset.bundle)!;
+                    itemInfo.finished = finished;
+                    itemInfo.total = total;
+
+                    info = `正在加载 ${this.getInfoName(item)}`;
                 }, (err, data) => {
-                    const info = assets.get(asset.bundle)!;
-                    info.done = true;
+                    const itemInfo = assets.get(asset.bundle)!;
+                    itemInfo.done = true;
 
                     if (err) {
                         logger.log("load dir failed", err);
@@ -492,12 +513,14 @@ export class AsyncLoadDelegate<T extends number> extends AsyncTask<T> implements
                 assets.set(asset.path, { finished: 0, total: 0, done: false });
                 // 加载零零散散的资源
                 bundle.load(asset.path, asset.type, (finished: number, total: number, item: AssetManager.RequestItem) => {
-                    const info = assets.get(asset.path)!;
-                    info.finished = finished;
-                    info.total = total;
+                    const itemInfo = assets.get(asset.path)!;
+                    itemInfo.finished = finished;
+                    itemInfo.total = total;
+
+                    info = `正在加载 ${this.getInfoName(item)}`;
                 }, (error, data) => {
-                    const info = assets.get(asset.path)!;
-                    info.done = true;
+                    const itemInfo = assets.get(asset.path)!;
+                    itemInfo.done = true;
 
                     if (error) {
                         logger.log("load bundle failed", error);
@@ -524,14 +547,22 @@ export class AsyncLoadDelegate<T extends number> extends AsyncTask<T> implements
                 }
             });
 
-            let value = 0 as T;
+            let value = { name: info, progress: 0 } as T;
             if (count != 0) {
-                value = (progress / count) as T;
+                value = { name: info, progress: progress / count } as T;
             }
 
             await handle;
             yield value as T;
         }
+    }
+
+    private getInfoName(item: AssetManager.RequestItem): string {
+        if (item.info && item.info.ctor) {
+            return `${item.info?.path ?? "游戏资源"}: [${js.getClassName(item.info.ctor)}]`;
+        }
+
+        return "游戏资源";
     }
 
     public override async *task(): AsyncGenerator<T> {
@@ -616,7 +647,7 @@ export class AssetService {
             return handle;
         }
 
-        handle = new AssetHandle(bundle, type, path) as AssetHandle<T>;
+        handle = new AssetHandle(bundle, type, path, key) as AssetHandle<T>;
         this._handles.set(key, handle as unknown as AssetHandle<typeof Asset>);
         return handle;
     }
@@ -774,7 +805,7 @@ export class AssetService {
      * @return {*}  {AsyncGenerator<number>}
      * @memberof AssetService
      */
-    public loadMultiAssets<T extends number>(assetHandles: MultiAssetsHandle): AsyncLoadDelegate<T> {
+    public loadMultiAssets<T extends { name: string, progress: number }>(assetHandles: MultiAssetsHandle): AsyncLoadDelegate<T> {
         DEBUG && assert(!!assetHandles, "assetHandles is null");
         DEBUG && assert(Array.isArray(assetHandles.bundle) && assetHandles.bundle.length > 0, "bundle is empty");
         DEBUG && assert(Array.isArray(assetHandles.handles) && assetHandles.handles.length > 0, "handles is empty");
@@ -797,7 +828,7 @@ export class AssetService {
      * @return {*}  {AsyncGenerator<number>}
      * @memberof AssetService
      */
-    public loadAssets<T extends number>(assetHandles: AssetHandle<typeof Asset>[]): AsyncLoadDelegate<T> {
+    public loadAssets<T extends { name: string, progress: number }>(assetHandles: AssetHandle<typeof Asset>[]): AsyncLoadDelegate<T> {
         DEBUG && assert(!!assetHandles, "assetHandles is null");
         DEBUG && assert(Array.isArray(assetHandles) && assetHandles.length > 0, "handles is empty");
 
@@ -820,7 +851,7 @@ export class AssetService {
      * @return {*}  {AsyncGenerator<number>}
      * @memberof AssetService
      */
-    public loadDir<T extends number>(assetHandles: AssetHandle<typeof Asset>): AsyncLoadDelegate<T> {
+    public loadDir<T extends { name: string, progress: number }>(assetHandles: AssetHandle<typeof Asset>): AsyncLoadDelegate<T> {
         DEBUG && assert(!!assetHandles, "assetHandles is null");
         DEBUG && assert(assetHandles.isDir(), "assetHandles is dir");
 
@@ -974,10 +1005,7 @@ export class AssetService {
 
         assetHandle.remRef();
         // bundle - path - type name
-        let key: string | number =
-            this._hashKey ?
-                assetHandle.hashCode() :
-                `${assetHandle.bundle}:${assetHandle.path}:${js.getClassName(assetHandle.type)}`;
+        let key: string | number = assetHandle.hashCode();
 
         let handle = this._handles.get(key) as unknown as IGameFramework.Nullable<AssetHandle<T>>;
         DEBUG && assert(!!handle && handle.equals(assetHandle));

@@ -74,7 +74,7 @@ export class AsyncNextState implements IGameFramework.IAsyncState<null, DefaultB
      * @memberof AsyncNextState
      */
     public update(): void {
-        if (this._actuator.progressInvoke) this._actuator.progressInvoke(this._progress);
+        if (this._actuator.progressInvoke) this._actuator.progressInvoke({ progress: this._progress, name: this._message });
     }
 
     /**
