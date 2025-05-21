@@ -245,7 +245,10 @@ class AssetHandle<T extends IGameFramework.Constructor<Asset>> {
      * @memberof AssetHandle
      */
     public async addRefAndSafeGetAsset(): Promise<IGameFramework.Nullable<InstanceType<T>>> {
-        this._ref++;
+        // prefab add ref must be in instantiateAsset method
+        if (js.getClassName(this.type) != "cc.Prefab") {
+            this._ref++;
+        }
         const asset = await this.safeGetAsset();
         return asset;
     }
