@@ -9,11 +9,13 @@
     "build": "tsc",
     "watch": "tsc -w"
   },
-  "description": "i18n:game-core.description",
+  "description": "i18n:game-framework.description",
   "main": "./dist/main.js",
   "devDependencies": {
     "@cocos/creator-types": "^3.8.3",
+    "@types/fs-extra": "^11.0.4",
     "@types/node": "^18.17.1",
+    "fs-extra": "^11.3.0",
     "ts-morph": "^25.0.1",
     "typescript": "^4.9.5",
     "vue": "^3.5.13"
@@ -32,6 +34,20 @@
     }
   },
   "contributions": {
+    "menu": [
+      {
+        "path": "i18n:game-framework.game_framework",
+        "label": "i18n:game-framework.createTemplate",
+        "message": "create_template"
+      }
+    ],
+    "messages": {
+      "create_template": {
+        "methods": [
+          "createTemplate"
+        ]
+      }
+    },
     "asset-db": {
       "mount": {
         "path": "./game-framework",
@@ -46,5 +62,5 @@
       }
     }
   },
-  "last_commit": "2025-03-26T13:22:58Z"
+  "last_commit": "2025-05-21T06:19:11Z"
 }

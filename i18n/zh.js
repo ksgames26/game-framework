@@ -15,5 +15,7 @@ module.exports={
     },
     panels:{
         setName:"成员命名"
-    }
+    },
+    createTemplate:"创建模板",
+    game_framework:"闪电/框架管理"
 };

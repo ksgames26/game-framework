@@ -15,5 +15,7 @@ module.exports={
     },
     panels:{
         setName:"Set Member Name"
-    }
+    },
+    createTemplate:"Create Template",
+    game_framework:"ksgames26/framework management"
 };
