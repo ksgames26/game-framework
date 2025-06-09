@@ -182,6 +182,36 @@ export async function createTemplate() {
         await fs.remove(tempExtractDir);
         console.log('临时文件清理完成。');
 
+        // 将模板项目中的 assets 文件夹内容移动到项目根 assets 目录，并删除模板项目原目录
+        console.log(`准备处理模板项目 ${repoName} 的内部 assets 文件夹...`);
+        const templateInnerAssetsPath = path.join(targetDirInAssets, 'assets');
+
+        if (fs.existsSync(templateInnerAssetsPath) && (await fs.stat(templateInnerAssetsPath)).isDirectory()) {
+            console.log(`发现模板内部 assets 文件夹: ${templateInnerAssetsPath}`);
+            console.log(`将其内容移动到项目主 assets 目录: ${assetsPath}`);
+
+            const itemsInTemplateAssets = await fs.readdir(templateInnerAssetsPath);
+            for (const item of itemsInTemplateAssets) {
+                const sourceItemPath = path.join(templateInnerAssetsPath, item);
+                const destinationItemPath = path.join(assetsPath, item); // assetsPath 是项目的主 assets 目录
+
+                // 如果目标已存在，先尝试删除，确保 move 操作对于文件夹能正确覆盖
+                if (fs.existsSync(destinationItemPath)) {
+                    console.log(`目标路径 ${destinationItemPath} 已存在，将先删除以进行覆盖。`);
+                    await fs.remove(destinationItemPath);
+                }
+                await fs.move(sourceItemPath, destinationItemPath, { overwrite: true }); // overwrite 适用于文件，对于目录，先删除再移动更可靠
+                console.log(`已移动 ${item} 到 ${destinationItemPath}`);
+            }
+            console.log('模板内部 assets 内容移动完成。');
+        } else {
+            console.log(`模板项目 ${repoName} 中未找到内部 assets 文件夹，或其不是一个目录。跳过移动内部 assets 步骤。`);
+        }
+
+        console.log(`删除模板项目原始根目录: ${targetDirInAssets}`);
+        await fs.remove(targetDirInAssets);
+        console.log(`模板项目原始根目录 ${targetDirInAssets} 已删除。`);
+
         console.log('刷新 Cocos Creator 资源数据库...');
         Editor.Message.send('asset-db', 'refresh'); 
         console.log('资源数据库刷新请求已发送。');
