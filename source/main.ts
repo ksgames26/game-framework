@@ -1,17 +1,9 @@
-import { createTemplate } from "./createTemplete";
 
 /*
  * @en Registration method for the main process of Extension
  * @zh 为扩展的主进程的注册方法
  */
-export const methods: { [key: string]: (...any: any) => any } = {
-        
-
-    async createTemplate() { 
-    
-        await createTemplate();
-    }
-};
+export const methods: { [key: string]: (...any: any) => any } = {};
 
 /**
  * @en Method Triggered on Extension Startup

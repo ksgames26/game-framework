@@ -2,7 +2,7 @@
   "$schema": "./@types/schema/package/index.json",
   "package_version": 2,
   "name": "game-framework",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "v",
   "editor": ">=3.8.3",
   "scripts": {
@@ -37,20 +37,6 @@
     }
   },
   "contributions": {
-    "menu": [
-      {
-        "path": "i18n:game-framework.game_framework",
-        "label": "i18n:game-framework.createTemplate",
-        "message": "create_template"
-      }
-    ],
-    "messages": {
-      "create_template": {
-        "methods": [
-          "createTemplate"
-        ]
-      }
-    },
     "asset-db": {
       "mount": {
         "path": "./game-framework",
