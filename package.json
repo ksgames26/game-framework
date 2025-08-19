@@ -37,6 +37,13 @@
     }
   },
   "contributions": {
+    "inspector": {
+        "section": {
+            "node": {
+                "ViewState": "./dist/inspector/view-state.js"
+            }
+        }
+    },
     "asset-db": {
       "mount": {
         "path": "./game-framework",
