@@ -567,7 +567,7 @@ export function onRootMenu(assetInfo: AssetInfo & { components: any[], prefab: {
                         );
 
                         if (componentInfo) {
-                            const baseView = componentInfo.extends?.find(item => item === "BaseView");
+                            const baseView = componentInfo.extends?.find(item => item === "BaseView" || item === "BaseViewComponent");
                             if (baseView) {
                                 hasBaseView = true;
                                 // 获取资源信息
