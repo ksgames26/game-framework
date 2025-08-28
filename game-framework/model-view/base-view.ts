@@ -1,6 +1,6 @@
 import { Component, EventKeyboard, Node, Renderer, UITransform, Widget, _decorator, easing, js, lerp } from "cc";
 import { DEBUG } from "cc/env";
-import { AsyncTask, Container, isDestroyed, logger, secFrame } from "db://game-core/game-framework";
+import { AsyncTask, Container, isChildClassOf, isDestroyed, logger, secFrame } from "db://game-core/game-framework";
 import { getEventListeners } from "../core/decorators";
 import { AssetService } from "../services/asset-service";
 import { TaskService } from "../services/task-service";
@@ -19,7 +19,7 @@ enum PushPopState {
 
 @ccclass("BaseView")
 @menu("GameFramework/ViewState/BaseView")
-export abstract class BaseView<T extends BaseService,S = any> extends Component implements IGameFramework.IDisposable {
+export abstract class BaseView<T extends BaseService, S = any> extends Component implements IGameFramework.IDisposable {
 
     /**
      * 打开面板时候的参数
@@ -238,6 +238,19 @@ export abstract class BaseView<T extends BaseService,S = any> extends Component 
 
         // 注册事件  
         getEventListeners(this).forEach((v, k) => {
+            let event = v.event;
+
+            if (event.startsWith("onTouch")) {
+                // 提取 需要监听点击事件的 名称
+                const touchEventName = event.slice("onTouch".length);
+                const sender = (this[touchEventName as keyof this] ?? this[`_${event.slice("onTouch".length)}` as keyof this]) as Component;
+
+                if (sender && isChildClassOf(sender.constructor as Function, js.getClassName(Component))) {
+                    sender.node.on(Node.EventType.TOUCH_END, v.value, this);
+                    return;
+                }
+            }
+
             if (v.global) {
                 const dispatcher = Container.getInterface("IGameFramework.IEventDispatcher")!;
                 dispatcher && dispatcher.addListener(v.event, v.value, this, v.count);
@@ -254,7 +267,7 @@ export abstract class BaseView<T extends BaseService,S = any> extends Component 
         if (this.isDisposed) {
             return;
         }
-        
+
         const hasTask = this.onShowStream();
         if (!hasTask) {
             await this.onShow();
@@ -312,6 +325,19 @@ export abstract class BaseView<T extends BaseService,S = any> extends Component 
 
         // 注销事件
         getEventListeners(this).forEach((v, k) => {
+            const event = v.event;
+
+            if (event.startsWith("onTouch")) {
+                // 提取 需要监听点击事件的 名称
+                const touchEventName = event.slice("onTouch".length);
+                const sender = (this[touchEventName as keyof this] ?? this[`_${event.slice("onTouch".length)}` as keyof this]) as Component;
+
+                if (sender && isChildClassOf(sender.constructor as Function, js.getClassName(Component))) {
+                    sender.node.off(Node.EventType.TOUCH_END, v.value, this);
+                    return;
+                }
+            }
+
             if (v.global) {
                 const dispatcher = Container.getInterface("IGameFramework.IEventDispatcher")!;
                 dispatcher && dispatcher.removeListener(v.event, v.value, this);
