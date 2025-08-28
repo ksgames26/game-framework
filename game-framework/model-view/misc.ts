@@ -10,26 +10,26 @@ import { AssetHandle } from "../services/asset-service";
  * @param spr 
  * @param handle 
  */
-export const setSpriteFrame = function (spr: Sprite, handle: AssetHandle<typeof SpriteFrame>) {
+export const setSpriteFrame = function (spr: Sprite, handle: AssetHandle<typeof SpriteFrame>, vaild: (old: AssetHandle<typeof SpriteFrame>) => boolean) {
     if (!handle.getAsset()) {
         if (handle.load) {
             handle.load.then(e => {
-                if (isDestroyed(spr.node)) {
+                if (isDestroyed(spr.node) || !vaild(handle)) {
                     return;
                 }
 
-                handle.setFrame(spr, true);
+                handle.setFrame(spr, false);
             });
         } else {
             handle.asyncLoad().then(e => {
-                if (isDestroyed(spr.node)) {
+                if (isDestroyed(spr.node) || !vaild(handle)) {
                     return;
                 }
 
-                handle.setFrame(spr, true);
+                handle.setFrame(spr, false);
             });
         }
     } else {
-        handle.setFrame(spr, true);
+        handle.setFrame(spr, false);
     }
 }
