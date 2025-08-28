@@ -2,7 +2,7 @@
   "$schema": "./@types/schema/package/index.json",
   "package_version": 2,
   "name": "game-framework",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "v",
   "editor": ">=3.8.3",
   "scripts": {
@@ -20,6 +20,9 @@
     "typescript": "^4.9.5",
     "vue": "^3.5.13"
   },
+  "gameDependencies": {
+    "game-core": "v1.0.1"
+  },
   "panels": {
     "set-name": {
       "title": "i18n:game-framework.panels.set_name",
@@ -34,19 +37,12 @@
     }
   },
   "contributions": {
-    "menu": [
-      {
-        "path": "i18n:game-framework.game_framework",
-        "label": "i18n:game-framework.createTemplate",
-        "message": "create_template"
-      }
-    ],
-    "messages": {
-      "create_template": {
-        "methods": [
-          "createTemplate"
-        ]
-      }
+    "inspector": {
+        "section": {
+            "node": {
+                "ViewState": "./dist/inspector/view-state.js"
+            }
+        }
     },
     "asset-db": {
       "mount": {
@@ -61,6 +57,5 @@
         "nodeMenu": "onNodeMenu"
       }
     }
-  },
-  "last_commit": "2025-05-21T06:19:11Z"
+  }
 }

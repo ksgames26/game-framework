@@ -1,7 +1,7 @@
-import { _decorator, Animation, AnimationClip, AnimationState, assert, game } from "cc";
-import { DEBUG } from "cc/env";
-import { DefaultBlackboard, AsyncStateMachine } from "../../intelligence/async-state-machine";
-const { ccclass, property, menu } = _decorator;
+import { _decorator, Animation, AnimationClip, AnimationState, assert, clamp, game } from "cc";
+import { DEBUG, EDITOR } from "cc/env";
+import { AsyncStateMachine, DefaultBlackboard } from "../../intelligence/async-state-machine";
+const { ccclass, property, menu, executeInEditMode } = _decorator;
 
 class State implements IGameFramework.IAsyncState<ViewState, DefaultBlackboard> {
     public declare stateMachine: ViewStateMachine;
@@ -143,6 +143,7 @@ DEBUG && assert(!!Animation, "项目设置中未启用动画模块");
  * @extends {Animation}
  */
 @ccclass("ViewState")
+@executeInEditMode
 @menu("GameFramework/ViewState/ViewState")
 export class ViewState extends Animation {
     /**
@@ -168,13 +169,17 @@ export class ViewState extends Animation {
         super.clips = value;
     }
 
+    @property private _stateIndex: number = 0;
+
+    @property({ tooltip: EDITOR ? "发布后，在视图组件载入时，是否切换到 stateIndex 状态" : "" }) private onLoadApply: boolean = false;
+
     @property({ type: AnimationClip, override: true, visible: true, displayName: "View State" })
     get defaultClip(): AnimationClip | null {
         return this._defaultClip;
     }
 
     set defaultClip(value) {
-        if (value == null || value == undefined) { 
+        if (value == null || value == undefined) {
             return;
         }
 
@@ -188,14 +193,56 @@ export class ViewState extends Animation {
     @property({ override: true, visible: false })
     public playOnLoad = false;
 
+    /**
+     * 编辑器Inspector函数
+     *
+     * @private
+     * @param {string} stateStr
+     * @memberof ViewState
+     */
+    private editorChangeState(stateStr: string) {
+        if (!EDITOR) {
+            return;
+        }
+
+        let state = parseInt(stateStr, 10);
+        const clip = this.defaultClip;
+        if (!clip) {
+            return;
+        }
+
+        const max = clip.events.length;
+        state = clamp(state, 0, max - 1);
+        this._stateIndex = state;
+        this.changeState(this._stateIndex, false);
+    }
+
     public onLoad() {
         const clip = this.defaultClip;
         if (!clip) {
             return;
         }
 
-        for (const event of clip.events.entries()) {
-            this._stateMachine.addState(new State(event[0], event[1]));
+        const map = new Map<number, AnimationClip.IEvent>();
+        for (const event of clip.events) {
+            const has = map.get(event.frame);
+            if (has) {
+                // 有名字的事件会替换掉没有名字的事件
+                if (!has.func && event.func) {
+                    map.set(event.frame, event);
+                }
+            } else {
+                map.set(event.frame, event);
+            }
+        }
+
+        let index = 0;
+        for (const e of map) {
+            this._stateMachine.addState(new State(index++, e[1]));
+        }
+
+        if (EDITOR || this.onLoadApply) {
+            this.changeState(this._stateIndex, false);
         }
     }
 
