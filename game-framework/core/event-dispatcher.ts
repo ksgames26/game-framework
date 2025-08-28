@@ -220,6 +220,8 @@ export class EventDispatcher<TEventOverview extends IGameFramework.EventOverview
         listenersList.deferred?.fulfilled();
         listenersList.deferred = null;
 
+        listenersList.isDispatching = false;
+
         if (listenersList.immediatelyEvent) {
             listenersList.dispatched = true;
             listenersList.dispatchData = eventData;
