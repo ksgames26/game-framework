@@ -15,6 +15,8 @@ export class AlignRightToLeft extends Component {
         }
 
         this.targetNode!.on(Node.EventType.SIZE_CHANGED, this.updateSize, this);
+        // 连续绑定
+        this.targetNode!.on(Node.EventType.TRANSFORM_CHANGED, this.updateSize, this);
     }
 
     updateSize() {

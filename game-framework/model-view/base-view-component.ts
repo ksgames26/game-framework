@@ -30,6 +30,7 @@ export abstract class BaseViewComponent<U extends BaseService, T extends BaseVie
     protected _view: T = null!;
     protected _canBindingFix: boolean = true;
     protected _canCloseSelf: boolean = false;
+    protected _viewComponents: BaseViewComponent<U, T>[] = [];
 
     /**
      * 如果你的组件是单独的prefab组件,那么你可以设置这个属性为true
@@ -46,6 +47,10 @@ export abstract class BaseViewComponent<U extends BaseService, T extends BaseVie
 
     public set asyncBinding(asyncBinding: boolean) {
         this._asyncBinging = asyncBinding;
+    }
+
+    public get viewComponents() {
+        return this._viewComponents;
     }
 
     public get isDisposed(): boolean {
@@ -123,6 +128,17 @@ export abstract class BaseViewComponent<U extends BaseService, T extends BaseVie
         if (this.onShow) {
             this.onShow();
         }
+    }
+
+    /**
+     * 显示所有子组件
+     *
+     * @memberof BaseViewComponent
+     */
+    public childComponentsShow(): void {
+        this._viewComponents.forEach(component => {
+            component.onShow?.();
+        });
     }
 
      /**

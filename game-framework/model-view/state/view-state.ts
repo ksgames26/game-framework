@@ -52,7 +52,7 @@ class State implements IGameFramework.IAsyncState<ViewState, DefaultBlackboard> 
 
     public update(entity: ViewState): void {
         let state = entity.getState(entity.defaultClip!.name);
-
+        if (!state) return;
         let delta = 0.0;
         if (this._direction == 1.0) {
             if (state.time >= this._event.frame) {
@@ -365,7 +365,8 @@ export class ViewState extends Animation {
      */
     public set percent(percent: number) {
         let state = this.createDefaultState();
-
+        if (!state) return;
+        
         state.time = state.duration * percent;
         state.sample();
         this._needAdjustState = true;

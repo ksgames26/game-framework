@@ -473,7 +473,7 @@ export class UIService extends EventDispatcher<EventOverview> implements IGameFr
 
                 // addChild 会触发onLoad
                 layer.addChild(ui);
-                view.afterAddChild();
+                view.afterAddChild(options, service);
                 this._openingViews.set(view.viewName, { view, clickBg });
 
                 if (options.pushPopView) {
@@ -482,7 +482,7 @@ export class UIService extends EventDispatcher<EventOverview> implements IGameFr
                 }
 
                 // 所以onShow是在onLoad之后
-                await view.applyShow(options, service);
+                await view.applyShow();
 
                 if (clickBg && !view.isDisposed && view.canClickClose()) {
                     clickBg.once(Node.EventType.TOUCH_START, (evt: EventTouch) => {

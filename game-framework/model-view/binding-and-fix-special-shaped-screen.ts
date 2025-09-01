@@ -1,6 +1,6 @@
 import { CCClass, CCObject, Component, Node, Rect, UITransform, Widget, assert, equals, screen, sys } from "cc";
 import { DEBUG, EDITOR } from "cc/env";
-import { bfsGetFirstChildByName, getWindowSize, isChildClassOf } from "db://game-core/game-framework";
+import { bfsGetFirstChildByName, getWindowSize, isChildClassOf, logger} from "db://game-core/game-framework";
 import { type BaseService } from "./base-service";
 import { type BaseView } from "./base-view";
 import { type BaseViewComponent } from "./base-view-component";
@@ -52,6 +52,13 @@ export function bindingAndFixSpecialShapedScreen(curr: BaseView<BaseService> | B
 
                 if (!binding(attr, curr, key, find, cache, ignore)) {
                     continue;
+                }
+
+                if (DEBUG) {
+                    if (!curr[key]) {
+                        logger.error(`can not bind ${key} in ${curr.node.name}`);
+                        continue;
+                    }
                 }
 
                 if (isChildClassOf((<Record<string, any>>curr)[key].constructor, "BaseViewComponent")) {
@@ -114,7 +121,7 @@ function binding(attr: { [attributeName: string]: any; }, curr: BaseView<BaseSer
 function bindBaseViewComponent(curr: BaseView<BaseService> | BaseViewComponent<BaseService, BaseView<BaseService>>, key: string, safeArea: Rect, ancestor: BaseView<BaseService>, cache?: Map<string, Node>) {
     const baseComponent = (<Record<string, any>>curr)[key] as BaseViewComponent<BaseService, BaseView<BaseService>>;
 
-    const isBaseView = isChildClassOf(curr.constructor, "BaseView");
+   const isBaseView = isChildClassOf(curr.constructor, "BaseView") || isChildClassOf(curr.constructor, "BaseViewComponent");
 
     if (isBaseView) {
         (curr as BaseView<BaseService>).viewComponents.push((<Record<string, any>>curr)[key]);

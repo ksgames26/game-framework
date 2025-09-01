@@ -212,14 +212,10 @@ export abstract class BaseView<T extends BaseService, S = any> extends Component
     /**
      * 显示面板
      *
-     * @param {OpenViewOptions} options
      * @return {*}  {Promise<void>}
      * @memberof BaseView
      */
-    public async applyShow(options: OpenViewOptions, service: T): Promise<void> {
-        this._options = options;
-        this._service = service;
-
+    public async applyShow(): Promise<void> {
         this.showBefore();
 
         if (this._options.playAnimation == UIAnimaOpenMode.OPEN_SHOW_BEFORE || this._options.playAnimation == UIAnimaOpenMode.OPEN_ALL) {
@@ -298,12 +294,14 @@ export abstract class BaseView<T extends BaseService, S = any> extends Component
                         // 防止在预加载完毕后，面板已经销毁。此时onShow已经无任何意义
                         // 对于有异步资源预加载的子组件，需要再次判断一下面板是不是销毁了，因为这里是异步执行。有足够的时机导致当前面板被销毁
                         if (!this.isDisposed) {
+                            viewComponents.childComponentsShow();
                             viewComponents.onShow?.()
                         }
                     });
                 } else {
                     // 如果没有实现预加载函数，直接调用onShow
                     // 对于没有异步资源预加载的子组件，就不需要再次判断当前面板是不是销毁了。因为这里是同步执行。
+                    viewComponents.childComponentsShow();
                     viewComponents.onShow?.();
                 }
             });
@@ -389,10 +387,12 @@ export abstract class BaseView<T extends BaseService, S = any> extends Component
      *
      * @memberof BaseView
      */
-    public afterAddChild() {
+    public afterAddChild(options: OpenViewOptions, service: T) {
         if (!this._canBindingFix) return;
         this._canBindingFix = false;
 
+        this._options = options;
+        this._service = service;
         const safeArea = Container.get(UIService)!.getSafeArea();
         bindingAndFixSpecialShapedScreen(this, safeArea, this, this._fixSpecialShapedScreenHasCache ? new Map() : void 0);
     }
