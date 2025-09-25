@@ -1,4 +1,4 @@
-import { EventTouch, Node, NodeEventType, Pool, assert, js } from "cc";
+import { EventTouch, Node, NodeEventType, Pool, assert, game, js } from "cc";
 import { DEBUG } from "cc/env";
 import { AsyncGeneratorMultipleCallsError, AsyncSet, AsyncTask, SinglyLinkedList, SyncTask, implementation, logger } from "db://game-core/game-framework";
 import { EventDispatcher } from "../core/event-dispatcher";
@@ -445,7 +445,7 @@ class WaitUntil<T> extends SyncTask<T> implements IGameFramework.ITask<T> {
  * @implements {IGameFramework.IAsyncTask<T>}
  * @template T
  */
-class WaitDealy<T> extends AsyncTask<T> implements IGameFramework.IAsyncTask<T> {
+class WaitDelay<T> extends AsyncTask<T> implements IGameFramework.IAsyncTask<T> {
     private _start: number = 0;
 
     public constructor(
@@ -518,6 +518,98 @@ class FrameUpdate<T> extends AsyncTask<T> implements IGameFramework.IAsyncTask<T
         this._callback.call(this._callee);
     }
 };
+
+
+/**
+ * 毫秒更新
+ *
+ * @class TimeUpdate
+ * @extends {AsyncTask<T>}
+ * @implements {IGameFramework.IAsyncTask<T>}
+ * @template T
+ */
+class TimeUpdate<T> extends AsyncTask<T> implements IGameFramework.IAsyncTask<T> {
+    private _startTime: number = 0;
+    private _lastTime: number = 0;
+    private _lastUpdateTime: number = 0;
+
+    public constructor(
+        runtime: IGameFramework.ITaskRuntime,
+        private _callback: (deltaTime: number) => void,
+        private _callee: unknown,
+        private _updateInterval: number = 1000 / parseInt(game.frameRate as string, 10),
+        token?: IGameFramework.ICancellationToken
+    ) {
+        super(runtime, token);
+        this._startTime = Date.now();
+        this._lastTime = this._startTime;
+        this._lastUpdateTime = this._startTime;
+    }
+
+    public override async *task(): IGameFramework.Nullable<AsyncGenerator<T>> {
+        yield await new Promise<T>(resolve => {
+            this._resolve = resolve;
+        });
+    }
+
+    public update(): void {
+        if (this._resolve == null) return;
+
+        if (this.isCancellationRequested) {
+            this._resolve && this._resolve(0 as T);
+            this._resolve = null;
+            return;
+        }
+
+        const currentTime = Date.now();
+
+        const timeSinceLastUpdate = currentTime - this._lastUpdateTime;
+        if (timeSinceLastUpdate < this._updateInterval) {
+            return;
+        }
+        // 多余的时间参与补偿，避免时间丢失
+        this._lastUpdateTime = currentTime - timeSinceLastUpdate;
+
+        const deltaTime = this._lastUpdateTime - this._lastTime;
+        this._lastTime = currentTime;
+
+        this._callback.call(this._callee, deltaTime);
+    }
+}
+
+/**
+ * 循环毫秒迭代
+ *
+ * @class LoopMilliseconds
+ * @extends {AsyncTask<number>}
+ * @implements {IGameFramework.IAsyncTask<number>}
+ */
+class LoopMilliseconds extends AsyncTask<number> implements IGameFramework.IAsyncTask<number> {
+    private _executed = 0;
+    private readonly _maxIterations: number;
+    private readonly _interval: number;
+
+    public constructor(
+        runtime: IGameFramework.ITaskRuntime,
+        interval: number,
+        maxIterations: number,
+        token?: IGameFramework.ICancellationToken
+    ) {
+        super(runtime, token);
+        this._interval = Math.max(1, Math.floor(interval));
+        this._maxIterations = Number.isFinite(maxIterations) ? Math.max(1, Math.floor(maxIterations)) : Number.POSITIVE_INFINITY;
+    }
+
+    public override async *task(): IGameFramework.Nullable<AsyncGenerator<number>> {
+        while (!this.isCancellationRequested && this._executed < this._maxIterations) {
+            await this.runtime.waitDelay(this._interval);
+            if (this.isCancellationRequested) return;
+            this._executed++;
+            this.handle.value = this._executed;
+            yield this.handle.value;
+        }
+    }
+}
 
 /**
  * 循环帧数迭代
@@ -834,7 +926,7 @@ export class TaskService implements IGameFramework.ISingleton, IGameFramework.IT
      * @param {IGameFramework.ITaskHandle<unknown>} handle
      * @memberof TaskService
      */
-    public free(handle: IGameFramework.ITaskHandle<unknown>): void {
+    private free(handle: IGameFramework.ITaskHandle<unknown>): void {
         // 在开发环境下不允许回收已经回收过的资源
         if (DEBUG) assert(!handle.inThePool, "handle is pooled");
         // 在生产环境下直接返回不做回收,但是可能会造成taskHandlePool的资源池越来越大
@@ -1009,13 +1101,13 @@ export class TaskService implements IGameFramework.ISingleton, IGameFramework.IT
     /**
      * 等待指定时间
      *
-     * @param {number} dealy 毫秒数
+     * @param {number} delay 毫秒数
      * @param {IGameFramework.ICancellationToken} [token]
      * @return {*}  {IGameFramework.ITaskHandle<number>} 最终会返回溢出时间
      * @memberof TaskService
      */
-    public waitDealy(dealy: number, token?: IGameFramework.ICancellationToken): IGameFramework.ITaskHandle<number> {
-        let task = this.get().reset(new WaitDealy(this, dealy, token)) as TaskHandle<number>;
+    public waitDelay(delay: number, token?: IGameFramework.ICancellationToken): IGameFramework.ITaskHandle<number> {
+        let task = this.get().reset(new WaitDelay(this, delay, token)) as TaskHandle<number>;
         this._running.push(task as TaskHandle<unknown>);
         return task;
     }
@@ -1047,6 +1139,36 @@ export class TaskService implements IGameFramework.ISingleton, IGameFramework.IT
     }
 
     /**
+     * 基于时间的异步循环
+     * 
+     * @example
+     * ```typescript
+     * for await (const o of task.loopTimeAsyncIter(1000, 5)) {
+     *    console.log(o);
+     * }
+     * ```
+     * 
+     * 对于TaskHandle可以使用isAsyncTask函数判断是不是AsynTask。AsyncTask请使用for await...of语法进行迭代
+     * 
+     * @template T
+     * @param {number} interval 间隔时间，单位毫秒
+     * @param {number} [maxIteration] 最大迭代次数
+     * @param {IGameFramework.ICancellationToken} [token]
+     * @return {*}  {IGameFramework.ITaskHandle<number>}
+     * @memberof TaskService
+     */
+    public loopTimeAsyncIter(interval: number, maxIteration?: number, token?: IGameFramework.ICancellationToken): IGameFramework.ITaskHandle<number> {
+        DEBUG && assert(interval > 0, "interval must be greater than 0");
+        if (maxIteration != null) {
+            DEBUG && assert(maxIteration > 0, "maxIteration must be greater than 0");
+        }
+        const limit = maxIteration ?? Number.POSITIVE_INFINITY;
+        const task = this.get().reset(new LoopMilliseconds(this, interval, limit, token)) as TaskHandle<number>;
+        this._running.push(task as TaskHandle<unknown>);
+        return task;
+    }
+
+    /**
      * 每帧更新
      * 
      * @param {() => void} callback
@@ -1057,6 +1179,22 @@ export class TaskService implements IGameFramework.ISingleton, IGameFramework.IT
      */
     public frameLoopTask(callback: () => void, callee: unknown, token?: IGameFramework.ICancellationToken): IGameFramework.ITaskHandle<void> {
         let task = this.get().reset(new FrameUpdate(this, callback, callee, token)) as TaskHandle<void>;
+        this._running.push(task as TaskHandle<unknown>);
+        return task;
+    }
+
+    /**
+     * 时间更新
+     *
+     * @param {(time: number) => void} callback
+     * @param {unknown} callee
+     * @param {number} interval
+     * @param {IGameFramework.ICancellationToken} [token]
+     * @return {*}  {IGameFramework.ITaskHandle<void>}
+     * @memberof TaskService
+     */
+    public timeLoopTask(callback: (time: number) => void, callee: unknown, interval: number, token?: IGameFramework.ICancellationToken): IGameFramework.ITaskHandle<void> {
+        let task = this.get().reset(new TimeUpdate(this, callback, callee, interval, token)) as TaskHandle<void>;
         this._running.push(task as TaskHandle<unknown>);
         return task;
     }

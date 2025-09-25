@@ -13,6 +13,10 @@ export class DefaultBlackboard implements IGameFramework.IStateMachineBlackboard
     public getValue<T>(key: string): IGameFramework.Nullable<T> {
         return this._values.get(key);
     }
+
+    public clear(): void {
+        this._values.clear();
+    }
 }
 
 type EventOverview<S> = {
@@ -48,6 +52,43 @@ export class AsyncStateMachine<E, B extends IGameFramework.IStateMachineBlackboa
      */
     public getCurrState(): IGameFramework.Nullable<S> {
         return this._currentState;
+    }
+
+    /**
+     * 当前状态是否为某个状态
+     *
+     * @param state
+     * @returns
+     */
+    public currentIsState(findState: IGameFramework.Constructor<S> | string): boolean {
+        const find = this._states.find(state => {
+            if (typeof findState === "string") {
+                return findState === state.id;
+            } else {
+                return state.constructor === findState;
+            }
+        });
+        return this._currentState === find;
+    }
+
+    /**
+     * 检查当前状态是否为提供的多个状态之一
+     *
+     * @param {...(IGameFramework.Constructor<S> | string)[]} states
+     * @return {*}  {boolean}
+     * @memberof AsyncStateMachine
+     */
+    public currentIsAnyOf(...states: (IGameFramework.Constructor<S> | string)[]): boolean {
+        const stateSet = new Set(states);
+        return this._states.some(state => {
+            if (typeof state.id === "string" && stateSet.has(state.id)) {
+                return this._currentState === state;
+            }
+            if (stateSet.has(state.constructor as IGameFramework.Constructor<S>)) {
+                return this._currentState === state;
+            }
+            return false;
+        });
     }
 
     /**
@@ -188,7 +229,7 @@ export class AsyncStateMachine<E, B extends IGameFramework.IStateMachineBlackboa
      * @memberof StateMachine
      */
     public async changeStateByCtor(newState: new (...args: any) => S): Promise<void> {
-        const find = this._states.find(state => newState.constructor == newState);
+        const find = this._states.find(state => state.constructor == newState);
         if (find) {
             this.changeStateByInstane(find);
         }

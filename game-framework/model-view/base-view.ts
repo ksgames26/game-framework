@@ -1,6 +1,6 @@
 import { Component, EventKeyboard, Node, Renderer, UITransform, Widget, _decorator, easing, js, lerp } from "cc";
 import { DEBUG } from "cc/env";
-import { AsyncTask, Container, isChildClassOf, isDestroyed, logger, secFrame } from "db://game-core/game-framework";
+import { AsyncTask, Container, isDestroyed, logger, secFrame } from "db://game-core/game-framework";
 import { getEventListeners } from "../core/decorators";
 import { AssetService } from "../services/asset-service";
 import { TaskService } from "../services/task-service";
@@ -218,6 +218,8 @@ export abstract class BaseView<T extends BaseService, S = any> extends Component
     public async applyShow(): Promise<void> {
         this.showBefore();
 
+        const taskSvr = Container.get(TaskService)!;
+
         if (this._options.playAnimation == UIAnimaOpenMode.OPEN_SHOW_BEFORE || this._options.playAnimation == UIAnimaOpenMode.OPEN_ALL) {
             // 如果不强制刷新一下根节点的widget会导致适配失效,最终播放动画的时候，大小会是设计分辨率而不是当前终端窗口分辨率
             const widget = this.node.getComponent(Widget);
@@ -234,19 +236,6 @@ export abstract class BaseView<T extends BaseService, S = any> extends Component
 
         // 注册事件  
         getEventListeners(this).forEach((v, k) => {
-            let event = v.event;
-
-            if (event.startsWith("onTouch")) {
-                // 提取 需要监听点击事件的 名称
-                const touchEventName = event.slice("onTouch".length);
-                const sender = (this[touchEventName as keyof this] ?? this[`_${event.slice("onTouch".length)}` as keyof this]) as Component;
-
-                if (sender && isChildClassOf(sender.constructor as Function, js.getClassName(Component))) {
-                    sender.node.on(Node.EventType.TOUCH_END, v.value, this);
-                    return;
-                }
-            }
-
             if (v.global) {
                 const dispatcher = Container.getInterface("IGameFramework.IEventDispatcher")!;
                 dispatcher && dispatcher.addListener(v.event, v.value, this, v.count);
@@ -259,7 +248,7 @@ export abstract class BaseView<T extends BaseService, S = any> extends Component
 
         // 等待一帧，让afterAddChild的里面Widget更新完毕
         // 要不然在afterAddChild里面调用onShow，如果此时使用某些API，比如UITransform.convertToWorldSpaceAR，会导致Widget没有更新完毕，导致位置错乱
-        await Container.get(TaskService)!.waitNextFrame();
+        await taskSvr!.waitNextFrame();
         if (this.isDisposed) {
             return;
         }
@@ -268,12 +257,11 @@ export abstract class BaseView<T extends BaseService, S = any> extends Component
         if (!hasTask) {
             await this.onShow();
         } else {
-            const task = Container.get(TaskService)!;
 
             // 如果onShowStream不为空，则不等待执行onShowSteram返回的任务
             // 此时applyShow函数不等待返回。
             // 调用者可以在onShowStream里面使用多任务来在无加载场景覆盖下做一些类似流式处理
-            task.runTask(hasTask).then(async () => {
+            taskSvr.runTask(hasTask).then(async () => {
                 if (this.isDisposed) {
                     return;
                 }
@@ -285,11 +273,12 @@ export abstract class BaseView<T extends BaseService, S = any> extends Component
 
         // 这里判断了当前面板还没有销毁
         if (!this.isDisposed) {
+            let childShowTaskCount = 0;
             this._viewComponents.forEach(viewComponents => {
-
                 // 如果实现了预加载函数
                 // 就先执行预加载函数完毕后再调用onShow
                 if (viewComponents.preloadAssets) {
+                    childShowTaskCount++;
                     viewComponents.preloadAssets().then(() => {
                         // 防止在预加载完毕后，面板已经销毁。此时onShow已经无任何意义
                         // 对于有异步资源预加载的子组件，需要再次判断一下面板是不是销毁了，因为这里是异步执行。有足够的时机导致当前面板被销毁
@@ -297,6 +286,15 @@ export abstract class BaseView<T extends BaseService, S = any> extends Component
                             viewComponents.childComponentsShow();
                             viewComponents.onShow?.()
                         }
+                        childShowTaskCount--;
+                    }).catch(err => {
+                        // 防止在预加载完毕后，面板已经销毁。此时onShow已经无任何意义
+                        // 对于有异步资源预加载的子组件，需要再次判断一下面板是不是销毁了，因为这里是异步执行。有足够的时机导致当前面板被销毁
+                        if (!this.isDisposed) {
+                            viewComponents.childComponentsShow();
+                            viewComponents.onShow?.()
+                        }
+                        childShowTaskCount--;
                     });
                 } else {
                     // 如果没有实现预加载函数，直接调用onShow
@@ -305,7 +303,23 @@ export abstract class BaseView<T extends BaseService, S = any> extends Component
                     viewComponents.onShow?.();
                 }
             });
+
+            await taskSvr.waitUntil(() => childShowTaskCount <= 0);
+            if (this.isDisposed) {
+                return;
+            }
+
+            this.onViewComponentsShowed();
         }
+    }
+    
+    /**
+     * 面板所有子组件显示完毕
+     *
+     * @memberof BaseView
+     */
+    public onViewComponentsShowed() {
+       
     }
 
     /**
@@ -318,24 +332,11 @@ export abstract class BaseView<T extends BaseService, S = any> extends Component
             await this.closeBeforeAnimate();
         }
 
-        this._viewComponents.forEach(c => c.onClose?.());
+        await Promise.all(this._viewComponents.map(c => c.onClose ? c.onClose() : Promise.resolve()));
         this._viewComponents.length = 0;
 
         // 注销事件
         getEventListeners(this).forEach((v, k) => {
-            const event = v.event;
-
-            if (event.startsWith("onTouch")) {
-                // 提取 需要监听点击事件的 名称
-                const touchEventName = event.slice("onTouch".length);
-                const sender = (this[touchEventName as keyof this] ?? this[`_${event.slice("onTouch".length)}` as keyof this]) as Component;
-
-                if (sender && isChildClassOf(sender.constructor as Function, js.getClassName(Component))) {
-                    sender.node.off(Node.EventType.TOUCH_END, v.value, this);
-                    return;
-                }
-            }
-
             if (v.global) {
                 const dispatcher = Container.getInterface("IGameFramework.IEventDispatcher")!;
                 dispatcher && dispatcher.removeListener(v.event, v.value, this);
@@ -390,9 +391,9 @@ export abstract class BaseView<T extends BaseService, S = any> extends Component
     public afterAddChild(options: OpenViewOptions, service: T) {
         if (!this._canBindingFix) return;
         this._canBindingFix = false;
-
         this._options = options;
         this._service = service;
+
         const safeArea = Container.get(UIService)!.getSafeArea();
         bindingAndFixSpecialShapedScreen(this, safeArea, this, this._fixSpecialShapedScreenHasCache ? new Map() : void 0);
     }

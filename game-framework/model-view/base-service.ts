@@ -41,6 +41,16 @@ export abstract class BaseService<
     public taskSvr: TaskService = Container.get(TaskService)!;
 
     /**
+     * 获取游戏中心事件分发器
+     *
+     * @return {*}  {EventDispatcher<IGameFramework.IGameEvent>}
+     * @memberof BaseService
+     */
+    public getGameCenterDispatcher(): EventDispatcher<IGameFramework.IGameEvent> {
+        return Container.get(EventDispatcher<IGameFramework.IGameEvent>);
+    }
+
+    /**
      * 获取观察者值
      *
      * @template K

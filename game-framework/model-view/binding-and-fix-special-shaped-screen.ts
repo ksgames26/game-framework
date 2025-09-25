@@ -1,6 +1,6 @@
 import { CCClass, CCObject, Component, Node, Rect, UITransform, Widget, assert, equals, screen, sys } from "cc";
 import { DEBUG, EDITOR } from "cc/env";
-import { bfsGetFirstChildByName, getWindowSize, isChildClassOf, logger} from "db://game-core/game-framework";
+import { bfsGetFirstChildByName, getWindowSize, isChildClassOf, logger } from "db://game-core/game-framework";
 import { type BaseService } from "./base-service";
 import { type BaseView } from "./base-view";
 import { type BaseViewComponent } from "./base-view-component";
@@ -49,8 +49,9 @@ export function bindingAndFixSpecialShapedScreen(curr: BaseView<BaseService> | B
                 }
 
                 const ignore = userData && userData.specialShapedScreen && userData.specialShapedScreen.ignore;
+                const compIndex = userData && userData.compIndex && userData.compIndex;
 
-                if (!binding(attr, curr, key, find, cache, ignore)) {
+                if (!binding(attr, curr, key, find, cache, ignore, compIndex)) {
                     continue;
                 }
 
@@ -88,7 +89,15 @@ export function bindingAndFixSpecialShapedScreen(curr: BaseView<BaseService> | B
  * @param cache 缓存已查找过的节点，可选参数
  * @returns 如果成功绑定，则返回true；否则返回false
  */
-function binding(attr: { [attributeName: string]: any; }, curr: BaseView<BaseService> | BaseViewComponent<BaseService, BaseView<BaseService>>, key: string, find: string, cache?: Map<string, Node>, ignore = false) {
+function binding(
+    attr: { [attributeName: string]: any; },
+    curr: BaseView<BaseService> | BaseViewComponent<BaseService, BaseView<BaseService>>,
+    key: string,
+    find: string,
+    cache?: Map<string, Node>,
+    ignore = false,
+    compIndex = 0
+) {
     if (attr.ctor === Node) {
         const n = bfsGetFirstChildByName(curr.node, find, cache);
         if (!n) {
@@ -98,12 +107,22 @@ function binding(attr: { [attributeName: string]: any; }, curr: BaseView<BaseSer
 
         (<Record<string, any>>curr)[key] = bfsGetFirstChildByName(curr.node, find, cache);
     } else {
-        const n = bfsGetFirstChildByName(curr.node, find, cache)!;
+        let n = bfsGetFirstChildByName(curr.node, find, cache)!;
         if (!n) {
-            DEBUG && !ignore && assert((<Record<string, any>>curr)[key] != void 0, `can not find ${key} in ${curr.node.name}`);
-            return false;
+
+            if (isChildClassOf(attr.ctor, "ViewState")) {
+                n = curr.node;
+            } else {
+                DEBUG && !ignore && assert((<Record<string, any>>curr)[key] != void 0, `can not find ${key} in ${curr.node.name}`);
+                return false;
+            }
         }
-        (<Record<string, any>>curr)[key] = n.getComponent(attr.ctor);
+
+        if (compIndex == 0) {
+            (<Record<string, any>>curr)[key] = n.getComponent(attr.ctor);
+        } else {
+            (<Record<string, any>>curr)[key] = n.getComponents(attr.ctor)[compIndex];
+        }
     }
 
     return true;
@@ -121,7 +140,7 @@ function binding(attr: { [attributeName: string]: any; }, curr: BaseView<BaseSer
 function bindBaseViewComponent(curr: BaseView<BaseService> | BaseViewComponent<BaseService, BaseView<BaseService>>, key: string, safeArea: Rect, ancestor: BaseView<BaseService>, cache?: Map<string, Node>) {
     const baseComponent = (<Record<string, any>>curr)[key] as BaseViewComponent<BaseService, BaseView<BaseService>>;
 
-   const isBaseView = isChildClassOf(curr.constructor, "BaseView") || isChildClassOf(curr.constructor, "BaseViewComponent");
+    const isBaseView = isChildClassOf(curr.constructor, "BaseView") || isChildClassOf(curr.constructor, "BaseViewComponent");
 
     if (isBaseView) {
         (curr as BaseView<BaseService>).viewComponents.push((<Record<string, any>>curr)[key]);

@@ -214,6 +214,43 @@ export class AsyncNextStateMachine extends AsyncTask<IGameFramework.ITaskActuato
     }
 
     /**
+    * 当前状态是否为某个状态
+    *
+    * @param state
+    * @returns
+    */
+    public currentIsState(findState: IGameFramework.Constructor<unknown> | string): boolean {
+        const find = this._states.find(state => {
+            if (typeof findState === "string") {
+                return findState === state.id;
+            } else {
+                return state.constructor === findState;
+            }
+        });
+        return this._currentState === find;
+    }
+
+    /**
+     * 检查当前状态是否为提供的多个状态之一
+     *
+     * @param {...(IGameFramework.Constructor<unknown> | string)[]} states
+     * @return {*}  {boolean}
+     * @memberof AsyncStateMachine
+     */
+    public currentIsAnyOf(...states: (IGameFramework.Constructor<unknown> | string)[]): boolean {
+        const stateSet = new Set(states);
+        return this._states.some(state => {
+            if (typeof state.id === "string" && stateSet.has(state.id)) {
+                return this._currentState === state;
+            }
+            if (stateSet.has(state.constructor as IGameFramework.Constructor<unknown>)) {
+                return this._currentState === state;
+            }
+            return false;
+        });
+    }
+
+    /**
      * 获取当前状态
      *
      * @return {*}  {IGameFramework.Nullable<AsyncNextState>}

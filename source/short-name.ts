@@ -39,5 +39,6 @@ export const shortNames: Record<string, string> = {
     // 其他
     'cvs': 'cc.Canvas',               // 画布
     'sfa': 'cc.SafeArea',             // 安全区域
-    'bie': 'cc.BlockInputEvents'      // 输入阻挡
+    'bie': 'cc.BlockInputEvents',     // 输入阻挡
+    'nod': 'cc.Node',                 // 节点
 };

@@ -1,10 +1,9 @@
-import { Component, _decorator } from "cc";
+import { Component, EventKeyboard, _decorator } from "cc";
 import { Container, isDestroyed } from "db://game-core/game-framework";
 import { UIService } from "../services/ui-service";
 import { BaseService } from "./base-service";
 import { type BaseView } from "./base-view";
 import { bindingAndFixSpecialShapedScreen } from "./binding-and-fix-special-shaped-screen";
-import { EventKeyboard } from "cc";
 const { ccclass, property, menu } = _decorator;
 
 /**
@@ -49,12 +48,12 @@ export abstract class BaseViewComponent<U extends BaseService, T extends BaseVie
         this._asyncBinging = asyncBinding;
     }
 
-    public get viewComponents() {
-        return this._viewComponents;
-    }
-
     public get isDisposed(): boolean {
         return isDestroyed(this.node);
+    }
+
+    public get viewComponents() {
+        return this._viewComponents;
     }
 
     @property protected _asyncBinging: boolean = false;
@@ -85,14 +84,18 @@ export abstract class BaseViewComponent<U extends BaseService, T extends BaseVie
         this._view = view;
     }
 
+    public get view() {
+        return this._view;
+    }
+
     /**
      * 组件所在的视图服务
      *
      * @readonly
-     * @protected
+     * @public
      * @memberof BaseViewComponent
      */
-    protected get service() {
+    public get service() {
         return this._view.service;
     }
 
@@ -141,45 +144,45 @@ export abstract class BaseViewComponent<U extends BaseService, T extends BaseVie
         });
     }
 
-     /**
-     * 键盘按下事件，总是从顶部面板往下传递
-     * 
-     * @example
-     * 
-     * ---root        4
-     *   ---panel1    3
-     *    ---panel2   2
-     *   ---panel3    1
+    /**
+    * 键盘按下事件，总是从顶部面板往下传递
+    * 
+    * @example
+    * 
+    * ---root        4
+    *   ---panel1    3
+    *    ---panel2   2
+    *   ---panel3    1
+    *
+    * @protected
+    * @param {EventKeyboard} event
+    * @memberof BaseView
+    */
+    public onKeyDown(event: EventKeyboard): void {
+
+    }
+
+    /**
+     * 键盘抬起事件，总是从顶部面板往下传递
      *
-     * @protected
+     * @public
      * @param {EventKeyboard} event
      * @memberof BaseView
      */
-     public onKeyDown(event: EventKeyboard): void {
-      
-     }
- 
-     /**
-      * 键盘抬起事件，总是从顶部面板往下传递
-      *
-      * @public
-      * @param {EventKeyboard} event
-      * @memberof BaseView
-      */
-     public onKeyUp(event: EventKeyboard): void {
- 
-     }
- 
-     /**
-      * 键盘长按事件，总是从顶部面板往下传递
-      *
-      * @public
-      * @param {EventKeyboard} event
-      * @memberof BaseView
-      */
-     public onKeyPressing(event: EventKeyboard): void {
- 
-     }
+    public onKeyUp(event: EventKeyboard): void {
+
+    }
+
+    /**
+     * 键盘长按事件，总是从顶部面板往下传递
+     *
+     * @public
+     * @param {EventKeyboard} event
+     * @memberof BaseView
+     */
+    public onKeyPressing(event: EventKeyboard): void {
+
+    }
 
     /**
      * 预加载资源

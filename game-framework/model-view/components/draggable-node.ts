@@ -40,6 +40,23 @@ export class DraggableNode extends Component {
         this.node.position = new Vec3(-this._screenWidth / 2 + halfWidth, 0, 1.0);
     }
 
+    public setRandomPosition() {
+        // 获取节点的 UITransform 组件
+        const uiTransform = this.node.getComponent(UITransform);
+        if (!uiTransform) return;
+
+        // 计算节点的半宽和半高
+        const halfWidth = uiTransform.width / 2;
+        const halfHeight = uiTransform.height / 2;
+
+        // 生成随机位置
+        const randomX = Math.random() * (this._screenWidth - uiTransform.width) - (this._screenWidth / 2 - halfWidth);
+        const randomY = Math.random() * (this._screenHeight - uiTransform.height) - (this._screenHeight / 2 - halfHeight);
+
+        // 设置节点位置
+        this.node.position = new Vec3(randomX, randomY, this.node.position.z);
+    }
+
     public onTouchStart(event: EventTouch) {
         this._isDragging = true;
         this._hasMove = false;

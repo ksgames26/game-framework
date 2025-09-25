@@ -1,6 +1,6 @@
-import { _decorator, Event, EventTouch, Node, PageView, Vec2, Vec3 } from "cc";
+import { _decorator, Event, EventTouch, Node, NodeEventType, PageView, sys, Vec2, Vec3, XrUIPressEventType } from "cc";
 import { ScrollViewPlus } from "./scroll-view-plus";
-const { ccclass,menu } = _decorator;
+const { ccclass, menu } = _decorator;
 
 const temp = new Vec2();
 const deltaPos = new Vec3();
@@ -35,6 +35,44 @@ export class PageViewPlus extends PageView {
     private _benignTouch: IGameFramework.Nullable<ScrollViewPlus> = null;
     private _firstDirection: "up" | "down" | "leftRight" = "leftRight";
     private _firstAdjust = true;
+
+    // modify by wanghanbin 
+    // 为了兼容slider嵌入到scrollview中，必现重新注册事件
+    // 不使用捕获
+    // 而是冒泡
+    protected _registerEvent(): void {
+        const self = this;
+        const node = self.node;
+        node.on(NodeEventType.TOUCH_START, self._onTouchBegan, self);
+        node.on(NodeEventType.TOUCH_MOVE, self._onTouchMoved, self);
+        node.on(NodeEventType.TOUCH_END, self._onTouchEnded, self);
+        node.on(NodeEventType.TOUCH_CANCEL, self._onTouchCancelled, self);
+        node.on(NodeEventType.MOUSE_WHEEL, self._onMouseWheel, self);
+
+        if (sys.isXR) {
+            node.on(XrUIPressEventType.XRUI_HOVER_ENTERED, self._xrHoverEnter, self);
+            node.on(XrUIPressEventType.XRUI_HOVER_EXITED, self._xrHoverExit, self);
+        }
+    }
+
+    // modify by wanghanbin 
+    // 为了兼容slider嵌入到scrollview中，必现重新注册事件
+    // 不使用捕获
+    // 而是冒泡
+    protected _unregisterEvent(): void {
+        const self = this;
+        const node = self.node;
+        node.off(NodeEventType.TOUCH_START, self._onTouchBegan, self);
+        node.off(NodeEventType.TOUCH_MOVE, self._onTouchMoved, self);
+        node.off(NodeEventType.TOUCH_END, self._onTouchEnded, self);
+        node.off(NodeEventType.TOUCH_CANCEL, self._onTouchCancelled, self);
+        node.off(NodeEventType.MOUSE_WHEEL, self._onMouseWheel, self);
+
+        if (sys.isXR) {
+            node.off(XrUIPressEventType.XRUI_HOVER_ENTERED, self._xrHoverEnter, self);
+            node.off(XrUIPressEventType.XRUI_HOVER_EXITED, self._xrHoverExit, self);
+        }
+    }
 
     protected _onTouchMoved(event: EventTouch, captureListeners: any): void {
         if (this._benignTouch) {
@@ -89,7 +127,6 @@ export class PageViewPlus extends PageView {
                 break;
             }
         }
-
         super._onTouchBegan(event, captureListeners);
     }
 
@@ -102,6 +139,7 @@ export class PageViewPlus extends PageView {
     protected _onTouchCancelled(event: EventTouch, captureListeners: any): void {
         this._benignTouch = null;
         this._firstAdjust = true;
+
         super._onTouchCancelled(event, captureListeners);
     }
 
@@ -116,6 +154,7 @@ export class PageViewPlus extends PageView {
         if (!this.enabledInHierarchy || !this._content) {
             return;
         }
+
         if (this._hasNestedViewGroup(event, captureListeners)) {
             return;
         }
@@ -128,12 +167,5 @@ export class PageViewPlus extends PageView {
         }
 
         this._stopPropagationIfTargetIsMe(event);
-    }
-
-    // 需要自己实现查找函数
-    // 查找到下一个ScrollViewPlus或者PageViewPlus就终止
-    // 因为最终要解决的是任意的互相嵌套问题
-    private _findViewGroup() { 
-
     }
 }

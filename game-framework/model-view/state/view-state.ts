@@ -51,8 +51,11 @@ class State implements IGameFramework.IAsyncState<ViewState, DefaultBlackboard> 
     }
 
     public update(entity: ViewState): void {
+        if (EDITOR && !entity.defaultClip) return;
+
         let state = entity.getState(entity.defaultClip!.name);
         if (!state) return;
+
         let delta = 0.0;
         if (this._direction == 1.0) {
             if (state.time >= this._event.frame) {
@@ -155,7 +158,9 @@ export class ViewState extends Animation {
     private _stateMachine = new ViewStateMachine(this, new DefaultBlackboard());
     private _index: number = 0;
     private _trans: boolean = true;
-    private _scale: number = 1.0;
+
+    @property({ editorOnly: true }) desc = "";
+    @property private _scale: number = 1.0;
     private _speed: number = 1.0;
     private _needAdjustState: boolean = false;
     private _clip: AnimationClip | null = null;
@@ -212,14 +217,47 @@ export class ViewState extends Animation {
         }
 
         const max = clip.events.length;
+        if (!max) {
+            return;
+        }
+
         state = clamp(state, 0, max - 1);
         this._stateIndex = state;
         this.changeState(this._stateIndex, false);
     }
 
+    /**
+     * 编辑器Inspector函数
+     *
+     * @private
+     * @return {*}  {string}
+     * @memberof ViewState
+     */
+    private editorGetState(): string {
+        if (!EDITOR) {
+            return "";
+        }
+
+        const clip = this.defaultClip;
+        if (!clip) {
+            return "0";
+        }
+
+        const max = clip.events.length;
+        if (!max) {
+            return "0";
+        }
+
+        return this._stateIndex.toString();
+    }
+
     public onLoad() {
         const clip = this.defaultClip;
         if (!clip) {
+            return;
+        }
+
+        if (clip.events.length <= 0) {
             return;
         }
 
@@ -273,6 +311,7 @@ export class ViewState extends Animation {
      *
      * @memberof ViewState
      */
+    @property
     public get scale() {
         return this._scale;
     }
@@ -366,7 +405,6 @@ export class ViewState extends Animation {
     public set percent(percent: number) {
         let state = this.createDefaultState();
         if (!state) return;
-        
         state.time = state.duration * percent;
         state.sample();
         this._needAdjustState = true;

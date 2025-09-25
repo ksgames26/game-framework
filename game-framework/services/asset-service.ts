@@ -1,6 +1,6 @@
-import { Asset, AssetManager, Component, Node, Prefab, Sprite, SpriteAtlas, SpriteFrame, _decorator, assert, assetManager, instantiate, js, murmurhash2_32_gc } from "cc";
+import { Asset, AssetManager, Component, ImageAsset, Node, Prefab, Sprite, SpriteAtlas, SpriteFrame, Texture2D, _decorator, assert, assetManager, instantiate, js, murmurhash2_32_gc } from "cc";
 import { DEBUG } from "cc/env";
-import { AsyncTask, Container, logger } from "db://game-core/game-framework";
+import { AsyncTask, Container, logger, makeDeferred } from "db://game-core/game-framework";
 import { TaskService } from "./task-service";
 
 const { ccclass } = _decorator;
@@ -15,6 +15,12 @@ const { ccclass } = _decorator;
 @ccclass("DirAsset")
 export class DirAsset extends Asset { }
 
+@ccclass("InternetPngImage")
+export class InternetPngImage extends SpriteFrame { }
+
+@ccclass("InternetJpgImage")
+export class InternetJpgImage extends SpriteFrame { }
+
 /**
  * 资源信息
  * 
@@ -24,12 +30,26 @@ export class DirAsset extends Asset { }
  * @class AssetHandle
  */
 class AssetHandle<T extends IGameFramework.Constructor<Asset>> {
+
+    /**
+     * 是否是网络资源
+     *
+     * @private
+     * @type {boolean}
+     * @memberof AssetHandle
+     */
+    private _internet: boolean = false;
+
     /**
      * 资源引用计数
      */
     private _ref: number = 0;
     private _loadP: IGameFramework.Nullable<Promise<Asset>>;
     private readonly _hash: number | string = 0;
+
+    public get internet(): boolean {
+        return this._internet;
+    }
 
     /**
      * 不允许在外部创建AssetHandle
@@ -52,6 +72,11 @@ class AssetHandle<T extends IGameFramework.Constructor<Asset>> {
         public path: string = "",
 
         /**
+         * 是不是网络资源
+         */
+        internet: boolean = false,
+
+        /**
          * 资源hash
          * 
          * 如果传入，则不会重新计算hash
@@ -59,6 +84,7 @@ class AssetHandle<T extends IGameFramework.Constructor<Asset>> {
         hash: number | string
     ) {
         this._hash = hash;
+        this._internet = internet;
     }
 
     /**
@@ -481,12 +507,27 @@ export class AsyncLoadDelegate<T extends { name: string, progress: number }> ext
         let progress = 0;
         let count = 0;
         let allComplete = false;
+
+        let internetCount = 0;
         let assets = new Map<string, { finished: number, total: number, done: boolean }>();
 
+        let assetSvr = Container.get(AssetService)!;
         let info = "正在加载[assets]: ";
         const _assets = this._assets;
         for (let i = 0; i < _assets.length; i++) {
             const asset = _assets[i];
+
+            if (asset.internet) {
+                internetCount++;
+                assetSvr!.
+                    loadAssetAsync(asset)
+                    .then(() => {
+                        internetCount--;
+                    }).catch(err => {
+                        internetCount--;
+                    });
+            }
+
             let bundle = assetManager.getBundle(asset.bundle) as AssetManager.Bundle;
 
             // 加载文件夹
@@ -550,6 +591,10 @@ export class AsyncLoadDelegate<T extends { name: string, progress: number }> ext
                 }
             });
 
+            if (internetCount > 0) {
+                allComplete = false;
+            }
+
             let value = { name: info, progress: 0 } as T;
             if (count != 0) {
                 value = { name: info, progress: progress / count } as T;
@@ -592,7 +637,11 @@ export class AsyncLoadDelegate<T extends { name: string, progress: number }> ext
  */
 @ccclass("AssetService")
 export class AssetService {
+
+    private _idGenerator = new js.IDGenerator("AssetService");
+    private _download: AssetManager.Downloader = assetManager.downloader;
     private _handles: Map<number | string, AssetHandle<typeof Asset>> = new Map<number | string, AssetHandle<typeof Asset>>();
+    private _assetInst: Map<AssetHandle<typeof Asset>, Asset> = new Map<AssetHandle<typeof Asset>, Asset>();
     private _hashKey: boolean = true;
 
     /**
@@ -650,7 +699,7 @@ export class AssetService {
             return handle;
         }
 
-        handle = new AssetHandle(bundle, type, path, key) as AssetHandle<T>;
+        handle = new AssetHandle(bundle, type, path, this.isInternetPath(path), key) as AssetHandle<T>;
         this._handles.set(key, handle as unknown as AssetHandle<typeof Asset>);
         return handle;
     }
@@ -667,6 +716,15 @@ export class AssetService {
     public async loadAssetAsync<T extends IGameFramework.Constructor<Asset>>(handle: AssetHandle<T>): Promise<IGameFramework.Nullable<InstanceType<T>>> {
         DEBUG && assert(!!handle, "assetInfo is null");
         DEBUG && assert(!handle.isDir(), "assetInfo is dir");
+
+        // 如果是远程网络资源
+        if (handle.internet) {
+            const inst = await this.getAsyncInternetPathAsset(handle.path, handle.type) as IGameFramework.Nullable<InstanceType<T>>;
+            if (inst) {
+                this._assetInst.set(handle as unknown as AssetHandle<typeof Asset>, inst as Asset);
+                return inst;
+            }
+        }
 
         const bundle = await this.getAsyncBundleUrl(handle.bundle);
         if (!bundle) {
@@ -731,7 +789,7 @@ export class AssetService {
      * @param {boolean} doDestroy
      * @memberof AssetService
      */
-    public setSpriteFrameByAtlas(sprite: Sprite, handle: AssetHandle<typeof SpriteAtlas>, frame: string, doDestroy: boolean): void {
+    public setSpriteFrameByAtlas(sprite: Sprite, handle: AssetHandle<typeof SpriteAtlas>, frame: string, doDestroy: boolean = false): void {
         const p = this.getAsset(handle);
         DEBUG && assert(!!p, "asset is null");
 
@@ -877,6 +935,11 @@ export class AssetService {
     public async getAssetAsync<T extends IGameFramework.Constructor<Asset>>(assetHandle: AssetHandle<T>): Promise<IGameFramework.Nullable<InstanceType<T>>> {
         DEBUG && assert(!!assetHandle, "assetInfo is null");
 
+        if (assetHandle.internet) {
+            const inst = this._assetInst.get(assetHandle as unknown as AssetHandle<typeof Asset>);
+            return inst as IGameFramework.Nullable<InstanceType<T>>;
+        }
+
         const bundle = await this.getAsyncBundleUrl(assetHandle.bundle);
         if (!bundle) {
             return null;
@@ -900,6 +963,11 @@ export class AssetService {
         DEBUG && assert(!!assetHandle, "assetInfo is null");
         DEBUG && assert(!assetHandle.isDir(), "assetInfo is dir");
 
+        if (assetHandle.internet) {
+            const inst = this._assetInst.get(assetHandle as unknown as AssetHandle<typeof Asset>);
+            return inst as IGameFramework.Nullable<InstanceType<T>>;
+        }
+
         let bundle = assetManager.getBundle(assetHandle.bundle) as IGameFramework.Nullable<AssetManager.Bundle>;
         if (!bundle) {
             return;
@@ -921,6 +989,9 @@ export class AssetService {
     public async releaseAsyncAsset<T extends IGameFramework.Constructor<Asset>>(assetHandle: AssetHandle<T>, doDestroy: boolean): Promise<void> {
         DEBUG && assert(!!assetHandle, "assetInfo is null");
 
+        if (assetHandle.internet) {
+            this.doReleaseAsset(null, assetHandle, doDestroy);
+        }
         const bundle = await this.getAsyncBundleUrl(assetHandle.bundle);
         this.doReleaseAsset(bundle, assetHandle, doDestroy);
     }
@@ -936,6 +1007,9 @@ export class AssetService {
     public releaseAsset<T extends IGameFramework.Constructor<Asset>>(assetHandle: AssetHandle<T>, doDestroy: boolean): void {
         DEBUG && assert(!!assetHandle, "assetInfo is null");
 
+        if (assetHandle.internet) {
+            this.doReleaseAsset(null, assetHandle, doDestroy);
+        }
         const bundle = this.getBundleUrl(assetHandle.bundle);
         this.doReleaseAsset(bundle, assetHandle, doDestroy);
     }
@@ -965,6 +1039,45 @@ export class AssetService {
             bundle = await promise;
         }
         return bundle;
+    }
+
+    private async getAsyncInternetPathAsset<T extends IGameFramework.Constructor<Asset>>(path: string, type: T): Promise<IGameFramework.Nullable<InstanceType<T>>> {
+        let strType = js.getClassName(type);
+        let downloadSuffix = "";
+        switch (strType) {
+            case "InternetPngImage":
+                downloadSuffix = ".png";
+                break;
+            case "InternetJpgImage":
+                downloadSuffix = ".jpg";
+                break;
+            default:
+                throw new Error(`not support internet asset type ${strType}`);
+        }
+
+        const { promise, resolve } = makeDeferred();
+        assetManager.loadRemote(path, { ext: downloadSuffix }, (err, data) => {
+            if (err) {
+                logger.log("download internet asset failed", err);
+                resolve(null!);
+                return;
+            }
+
+            resolve(data);
+        });
+
+        const data = await promise;
+        switch (strType) {
+            case "InternetPngImage":
+            case "InternetJpgImage":
+                let sp = new SpriteFrame();
+                let tex = new Texture2D();
+                tex.image = data as ImageAsset;
+                sp.texture = tex;
+                return sp as IGameFramework.Nullable<InstanceType<T>>;
+            default:
+                return;
+        }
     }
 
     /**
@@ -1002,7 +1115,7 @@ export class AssetService {
      * @memberof AssetService
      */
     private doReleaseAsset<T extends IGameFramework.Constructor<Asset>>(bundle: IGameFramework.Nullable<AssetManager.Bundle>, assetHandle: AssetHandle<T>, doDestroy: boolean): void {
-        if (!bundle) {
+        if (!bundle && !assetHandle.internet) {
             return;
         }
 
@@ -1014,7 +1127,28 @@ export class AssetService {
         DEBUG && assert(!!handle && handle.equals(assetHandle));
 
         if (assetHandle.ref <= 0 && doDestroy) {
-            bundle.release(assetHandle.path, assetHandle.type);
+            if (assetHandle.internet) {
+                const inst = this._assetInst.get(assetHandle as unknown as AssetHandle<typeof Asset>);
+                if (inst) {
+                    inst.destroy();
+                    this._assetInst.delete(assetHandle as unknown as AssetHandle<typeof Asset>);
+                }
+                this._handles.delete(key);
+            } else {
+                bundle.release(assetHandle.path, assetHandle.type);
+            }
         }
+    }
+
+    /**
+     * 是否是网络资源
+     *
+     * @private
+     * @param {string} path
+     * @return {*}  {boolean}
+     * @memberof AssetService
+     */
+    private isInternetPath(path: string): boolean {
+        return path.startsWith("http://") || path.startsWith("https://");
     }
 }

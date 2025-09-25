@@ -285,45 +285,40 @@ export class LayoutPlus extends Layout {
         if (count === 1) {
             // 1个元素：完全居中
             const child = rowChildren[0];
-            // const childScaleX = this._getUsedScaleValue(child.node.scale.x);
-            // const anchorX = child.anchorX;
-            // const childBoundingBoxWidth = child.width * childScaleX;
-            // const positionX = centerX - anchorX * childBoundingBoxWidth;
             child.node.setPosition(new Vec3(0, child.node.position.y, 0));
         } else if (count === 2) {
-            // 2个元素：最左和最右
+            // 2个元素：左边元素锚点在0点，右边元素锚点在最大长度上
             const leftChild = rowChildren[0];
             const rightChild = rowChildren[1];
 
-            // 左边元素
-            const leftScaleX = this._getUsedScaleValue(leftChild.node.scale.x);
-            const leftAnchorX = leftChild.anchorX;
-            const leftBoundingBoxWidth = leftChild.width * leftScaleX;
-            const leftX = this._paddingLeft + leftAnchorX * leftBoundingBoxWidth + (-layoutAnchor.x) * baseWidth;
-            leftChild.node.setPosition(new Vec3(leftX, leftChild.node.position.y, 0));
+            // 计算布局边界（锚点位置范围）
+            const leftBoundary = this._paddingLeft + (-layoutAnchor.x) * baseWidth;
+            const rightBoundary = (1 - layoutAnchor.x) * baseWidth - this._paddingRight;
 
-            // 右边元素
-            const rightScaleX = this._getUsedScaleValue(rightChild.node.scale.x);
-            const rightAnchorX = rightChild.anchorX;
-            const rightBoundingBoxWidth = rightChild.width * rightScaleX;
-            const rightX = (1 - layoutAnchor.x) * baseWidth - this._paddingRight - (1 - rightAnchorX) * rightBoundingBoxWidth;
-            rightChild.node.setPosition(new Vec3(rightX, rightChild.node.position.y, 0));
+            // 左边元素锚点在leftBoundary
+            leftChild.node.setPosition(new Vec3(leftBoundary, leftChild.node.position.y, 0));
+
+            // 右边元素锚点在rightBoundary
+            rightChild.node.setPosition(new Vec3(rightBoundary, rightChild.node.position.y, 0));
         } else {
-            // 3个或更多元素：均匀分布，首尾靠边，中间均匀分布
-            const spacing = count > 2 ? (availableWidth - this._getTotalChildrenWidth(rowChildren)) / (count - 1) : 0;
-
-            let currentX = this._paddingLeft + (-layoutAnchor.x) * baseWidth;
-
+            // 计算布局边界（锚点位置范围）
+            const leftBoundary = this._paddingLeft + (-layoutAnchor.x) * baseWidth;
+            const rightBoundary = (1 - layoutAnchor.x) * baseWidth - this._paddingRight;
+            const totalAvailableWidth = rightBoundary - leftBoundary;
+            
+            // 计算锚点间距：总可用宽度 / (元素数量 - 1)
+            const anchorSpacing = totalAvailableWidth / (count - 1);
+            
+            // 布局所有元素
+            // 第一个元素锚点在leftBoundary，最后一个元素锚点在rightBoundary
             for (let i = 0; i < count; i++) {
                 const child = rowChildren[i];
-                const childScaleX = this._getUsedScaleValue(child.node.scale.x);
-                const anchorX = child.anchorX;
-                const childBoundingBoxWidth = child.width * childScaleX;
-
-                const positionX = currentX + anchorX * childBoundingBoxWidth;
-                child.node.setPosition(new Vec3(positionX, child.node.position.y, 0));
-
-                currentX += childBoundingBoxWidth + spacing;
+                
+                // 计算当前元素的锚点位置
+                const anchorPositionX = leftBoundary + i * anchorSpacing;
+                
+                // 设置元素位置（锚点位置就是元素的实际位置）
+                child.node.setPosition(new Vec3(anchorPositionX, child.node.position.y, 0));
             }
         }
     }

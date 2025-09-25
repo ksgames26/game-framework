@@ -30,7 +30,7 @@ export class ViewLock<S extends BaseService, StreamTaskReturn> {
         return this._canOpen;
     }
 
-    public async openView(): Promise<IGameFramework.Nullable<BaseView<S, StreamTaskReturn>>> {
+    public async openView(args?: unknown): Promise<IGameFramework.Nullable<BaseView<S, StreamTaskReturn>>> {
         if (!this._canOpen) {
             logger.warn("View is locking, cannot open view");
             return;
@@ -42,6 +42,11 @@ export class ViewLock<S extends BaseService, StreamTaskReturn> {
             logger.error("UIService instance is null");
             return;
         }
+
+        if (args) {
+            this._options.args = args;
+        }
+
         const view = await uiSvr.openView(this._options, this._service);
         if (view) {
             view.viewCloseAfter().then(() => {

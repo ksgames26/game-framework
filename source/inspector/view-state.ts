@@ -24,6 +24,7 @@ const createSelectorProp = (labelText: string, selectorClassName: string, select
     const selector = createSelector(selectorClassName, selectorDefaultValue, selectorOptions, selectCb);
     selectorProp.appendChild(label);
     selectorProp.appendChild(selector);
+
     return selectorProp;
 };
 
@@ -64,13 +65,6 @@ type UIProp = HTMLElement & { render(dump: any): void };
 export async function update(this: PanelThis, dump: any) {
     this.dump = dump;
     const content = (this.$.content as HTMLElement);
-    const editorMode = Editor.EditMode.getMode();
-
-    if (editorMode === "animation") {
-        while (content.firstChild) {
-            content.removeChild(content.firstChild);
-        }
-    }
 
     for (const key in dump.value) {
         const value = dump.value[key];
@@ -126,7 +120,41 @@ export async function update(this: PanelThis, dump: any) {
 
                                     const events: IEvent[] = Array.from(map.values());
 
-                                    let $prop = createSelectorProp(
+
+                                    $prop = content.querySelector(`ui-prop[key=State]`);
+                                    if ($prop) {
+                                        const existingSelector = $prop.querySelector('ui-select');
+                                        if (existingSelector) {
+                                            // 记录当前选中的值
+                                            const currentValue = existingSelector.getAttribute('value');
+
+                                            // 清空现有options
+                                            while (existingSelector.firstChild) {
+                                                existingSelector.removeChild(existingSelector.firstChild);
+                                            }
+
+                                            // 添加新的options
+                                            events.forEach((event, index) => {
+                                                const option = createOption({
+                                                    value: index.toString(),
+                                                    text: event.func || "状态" + (index + 1)
+                                                });
+                                                existingSelector.appendChild(option);
+                                            });
+
+                                            // 恢复之前选中的值
+                                            existingSelector.setAttribute('value', currentValue!);
+
+                                            await Editor.Message.request('scene', 'execute-component-method', {
+                                                uuid: dump.value.uuid.value,
+                                                name: 'editorChangeState',
+                                                args: currentValue,
+                                            });
+                                        }
+                                        return;
+                                    }
+
+                                    $prop = createSelectorProp(
                                         "State",
                                         "event",
                                         "0",
@@ -142,8 +170,24 @@ export async function update(this: PanelThis, dump: any) {
                                                 args: v,
                                             });
                                         }
-                                    );
+                                    ) as UIProp;
+
+                                    $prop.setAttribute("key", "State");
                                     content.appendChild($prop);
+
+                                    const state = await Editor.Message.request('scene', 'execute-component-method', {
+                                        uuid: dump.value.uuid.value,
+                                        name: 'editorGetState',
+                                    });
+                                    const selector = $prop.querySelector('ui-select');
+                                    if (selector) {
+                                        selector.setAttribute('value', state);
+                                        await Editor.Message.request('scene', 'execute-component-method', {
+                                            uuid: dump.value.uuid.value,
+                                            name: 'editorChangeState',
+                                            args: state,
+                                        });
+                                    }
                                 }
                             }
                         }
@@ -155,4 +199,3 @@ export async function update(this: PanelThis, dump: any) {
         }
     }
 }
-export function ready(this: Selector<typeof $>) { }
