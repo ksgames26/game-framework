@@ -330,8 +330,8 @@ export class TaskHandle<T> extends EventDispatcher<{ done: T }> implements IGame
      */
     public dispose(): void {
         if (this._disposed) return;
-        this._disposed = true;
         this.cleanUp();
+        this._disposed = true;
     }
 
     /**

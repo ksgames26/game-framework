@@ -231,8 +231,10 @@ export class AsyncStateMachine<E, B extends IGameFramework.IStateMachineBlackboa
     public async changeStateByCtor(newState: new (...args: any) => S): Promise<void> {
         const find = this._states.find(state => state.constructor == newState);
         if (find) {
-            this.changeStateByInstane(find);
+            await this.changeStateByInstane(find);
         }
+
+        return Promise.resolve();
     }
 
     /**
@@ -245,7 +247,7 @@ export class AsyncStateMachine<E, B extends IGameFramework.IStateMachineBlackboa
     public async changeStateById(id: string | number): Promise<void> {
         const find = this._states.find(state => state.id === id);
         if (find) {
-            this.changeStateByInstane(find);
+            await this.changeStateByInstane(find);
         }
     }
 

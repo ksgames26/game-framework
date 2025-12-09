@@ -1,11 +1,10 @@
 import { Asset, EventKeyboard, EventTouch, Input, Layers, Node, Prefab, Rect, UITransform, Widget, _decorator, assert, find, input, js, sys } from "cc";
 import { DEBUG } from "cc/env";
-import { Container, isChildClassOf, isEmptyStr, logger, utils } from "db://game-core/game-framework";
+import { Container, SortedSet, isChildClassOf, isEmptyStr, logger, utils } from "db://game-core/game-framework";
 import { EventDispatcher } from "../core/event-dispatcher";
 import { type BaseService } from "../model-view/base-service";
 import { type BaseView } from "../model-view/base-view";
 import { type BaseViewComponent } from "../model-view/base-view-component";
-import { SortedSet } from "db://game-core/game-framework";
 import { AssetHandle, AssetService } from "./asset-service";
 
 type OnCloseReturn<T extends BaseView<U>, U extends BaseService> = IGameFramework.Nullable<ReturnType<T["onClose"]>>;
@@ -13,6 +12,11 @@ type OnCloseReturn<T extends BaseView<U>, U extends BaseService> = IGameFramewor
 const { ccclass } = _decorator;
 
 export const enum UILayer {
+
+    /**
+     * 自定义层
+     */
+    Custom,
 
     /**
      * 全局事件点击层
@@ -139,6 +143,13 @@ export class OpenViewOptions {
          * 面板的层级
          */
         public layer: UILayer = UILayer.Mid,
+
+        /**
+         * 自定义层节点
+         * 
+         * 如果layer选择了Custom，那么这个节点不能为空
+         */
+        public layerNode: IGameFramework.Nullable<Node> = null,
 
         /**
          * 是否是pushPopView。pushPopView和非pushPopView在界面管理上无任何关系
@@ -317,6 +328,21 @@ export class UIService extends EventDispatcher<EventOverview> implements IGameFr
 
     /**
      * 异步实例化一个新组件，并添加到指定节点
+     * 
+     * 
+     * @example 这种代码是不正确的
+     * 
+     * ```ts
+     * // 这种代码是不正确的
+     * const yourGameViewComponent = uiSvr.appendComponent<BaseView, BaseService, YourGameViewComponent>(this, handle, parent);
+     * yourGameViewComponent.node.setPosition(x, y, 0); // 这里设置坐标是不正确的，因为百分比布局会覆盖这个坐标
+     * 
+     * // 正确的做法是在组件的onShow里面设置坐标
+     * // 或者者等下一帧再设置坐标 
+     * await taskSvr.waitNextFrame();
+     * yourGameViewComponent.node.setPosition(x, y, 0); // 这里设置坐标是正确的
+     * 
+     * ```
      *
      * @template T 继承自 BaseView 的视图类型
      * @template U 继承自 BaseService 的服务类型
@@ -330,12 +356,18 @@ export class UIService extends EventDispatcher<EventOverview> implements IGameFr
         DEBUG && assert(!!prefab, "prefab is null");
         DEBUG && assert(!!view, "view is null");
 
-        await this._loadService.loadAssetAsync(prefab);
-        return this.appendComponent<T, U, C>(view, prefab, parent);
+        if (!prefab.getAsset()) {
+            await this._loadService.loadAssetAsync(prefab);
+        }
+
+        const comp = await this._internalAppendComponent(view, prefab, parent, true);
+        return comp as IGameFramework.Nullable<C>;
     }
 
     /**
      * 同步实例化一个新组件，并添加到指定节点
+     * 
+     * @注意 如果试图组件上的widget组件是百分比布局的，最好在组件的onShow里面设置坐标而不是提前设置坐标
      *
      * @template T
      * @template U
@@ -350,23 +382,49 @@ export class UIService extends EventDispatcher<EventOverview> implements IGameFr
         DEBUG && assert(!!prefab, "prefab is null");
         DEBUG && assert(!!view, "view is null");
 
+        return this._internalAppendComponent(view, prefab, parent, false) as IGameFramework.Nullable<C>;
+    }
+
+    /**
+     * 统一的组件实例化逻辑
+     *
+     * @remarks
+     * - `isAsync = true` 时，会调用组件的 `asyncAfterAddChild`，通常用于需要预加载或异步初始化的场景。
+     * - `isAsync = false` 时，会调用组件的 `afterAddChild`，保持同步。
+     */
+    private _internalAppendComponent<T extends BaseView<U>, U extends BaseService, C extends BaseViewComponent<U, T>>(
+        view: T,
+        prefab: AssetHandle<typeof Prefab>,
+        parent: Node,
+        isAsync: boolean,
+    ): IGameFramework.Nullable<C> | Promise<IGameFramework.Nullable<C>> {
         const asset = this._loadService.getAsset(prefab);
         if (!asset || view.isDisposed) return;
 
-        if (asset instanceof Prefab) {
-            const assetMgr = Container.get(AssetService)!;
-            const comp = assetMgr.instantiateAsset(prefab as AssetHandle<typeof Prefab>, true);
-
-            DEBUG && assert(!!comp, "instantiate failed");
-            const viewComponent = comp.getComponent("BaseViewComponent") as C;
-            viewComponent.view = view;
-            parent.addChild(comp);
-            viewComponent.afterAddChild();
-
-            return viewComponent;
+        if (!(asset instanceof Prefab)) {
+            return null!;
         }
 
-        return null!;
+        const assetMgr = Container.get(AssetService)!;
+        const comp = assetMgr.instantiateAsset(prefab as AssetHandle<typeof Prefab>, true);
+
+        DEBUG && assert(!!comp, "instantiate failed");
+        const viewComponent = comp.getComponent("BaseViewComponent") as C;
+        viewComponent.view = view;
+        parent.addChild(comp);
+
+        if (isAsync) {
+            return (async () => {
+                await viewComponent.asyncAfterAddChild();
+                if (viewComponent.isDisposed) {
+                    return null;
+                }
+                return viewComponent;
+            })();
+        } else {
+            viewComponent.afterAddChild();
+            return viewComponent;
+        }
     }
 
     /**
@@ -460,8 +518,12 @@ export class UIService extends EventDispatcher<EventOverview> implements IGameFr
 
             const view = ui.getComponent("BaseView") as T;
             if (view) {
-                const layer = this.getLayer(options.layer);
-                if (!layer) return null!;
+                const layer = options.layer == UILayer.Custom ? options.layerNode : this.getLayer(options.layer);
+                if (!layer) {
+                    logger.error(`layer ${options.layer} node is null`);
+                    ui.destroy();
+                    return null!;
+                }
 
                 DEBUG && assert(!(options.pushPopView && options.showType == UIShowType.BlackBaseView), "暂不支持一个面板是PUSHPOP面板又使用黑色背景打开的方式打开面板")
 

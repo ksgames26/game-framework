@@ -1,5 +1,5 @@
-import { Component, EventKeyboard, _decorator } from "cc";
-import { Container, isDestroyed } from "db://game-core/game-framework";
+import { Component, EventKeyboard, UIOpacity, Widget, _decorator } from "cc";
+import { Container, Deferred, isDestroyed, isPromise, logger } from "db://game-core/game-framework";
 import { UIService } from "../services/ui-service";
 import { BaseService } from "./base-service";
 import { type BaseView } from "./base-view";
@@ -29,6 +29,7 @@ export abstract class BaseViewComponent<U extends BaseService, T extends BaseVie
     protected _view: T = null!;
     protected _canBindingFix: boolean = true;
     protected _canCloseSelf: boolean = false;
+    protected _closeDeferred: Deferred<void> | null = null;
     protected _viewComponents: BaseViewComponent<U, T>[] = [];
 
     /**
@@ -111,13 +112,38 @@ export abstract class BaseViewComponent<U extends BaseService, T extends BaseVie
         await this._view.close();
     }
 
-    protected async close() {
+    public async close() {
+        if (this.isDisposed) {
+            return;
+        }
+
+        if (this._closeDeferred) {
+            return this._closeDeferred?.promise;
+        }
+
+        this._closeDeferred = new Deferred<void>();
         if (this._canCloseSelf) {
             await this.onClose?.();
         }
+
+        const deferred = this._closeDeferred;
+        this.node.removeFromParent();
+        this.node.destroy();
+        deferred?.fulfilled();
+        this._closeDeferred = null;
     }
 
     public afterAddChild() {
+        this._handleAfterAddChild(false).catch((err) => {
+            logger.error("BaseViewComponent afterAddChild error:", err);
+        });
+    }
+
+    public async asyncAfterAddChild() {
+        await this._handleAfterAddChild(true);
+    }
+
+    private async _handleAfterAddChild(withPreload: boolean): Promise<void> {
         if (!this._asyncBinging || !this._view || !this._canBindingFix) return;
 
         // 不允许二次绑定
@@ -128,8 +154,52 @@ export abstract class BaseViewComponent<U extends BaseService, T extends BaseVie
 
         // 对于直接在view所在的prefab上的组件，是不会被调用afterAddChild的。在view中会自动调用所有实现了onShow函数的组件
         // 但是对于动态prefab实例化出来的组件，是会调用组件的afterAddChild的，所以这里需要手动调用onShow
-        if (this.onShow) {
-            this.onShow();
+        if (!this.onShow) {
+            return;
+        }
+
+        const widget = this.node.getComponent(Widget);
+        const needWaitNextFrame = widget && (!widget.isAbsoluteLeft || !widget.isAbsoluteTop || !widget.isAbsoluteRight || !widget.isAbsoluteBottom);
+
+        const runOnShow = async () => {
+            if (withPreload && this.preloadAssets) {
+                await this.preloadAssets();
+            }
+
+            const result = this.onShow!();
+            if (result && isPromise(result)) {
+                result.catch((err) => {
+                    logger.error("BaseViewComponent onShow error:", err);
+                });
+            }
+        };
+
+        if (needWaitNextFrame) {
+            let add = false;
+            let sourceValue = 255;
+            let uiOpacity = this.node.getComponent(UIOpacity);
+            if (uiOpacity) {
+                sourceValue = uiOpacity.opacity;
+            } else {
+                uiOpacity = this.node.addComponent(UIOpacity);
+                add = true;
+            }
+
+            uiOpacity.opacity = 0;
+
+            await this._view.service.taskSvr.waitNextFrame();
+            if (this.isDisposed) {
+                return;
+            }
+
+            uiOpacity.opacity = sourceValue;
+            if (add) {
+                uiOpacity.destroy();
+            }
+
+            await runOnShow();
+        } else {
+            await runOnShow();
         }
     }
 
@@ -196,7 +266,7 @@ export abstract class BaseViewComponent<U extends BaseService, T extends BaseVie
      *
      * @memberof BaseViewComponent
      */
-    public onShow?(): void;
+    public onShow?(): Promise<void> | void;
 
     /**
      * 视图组件的销毁

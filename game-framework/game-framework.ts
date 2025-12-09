@@ -19,6 +19,7 @@ export * from "./services/asset-service";
 export * from "./services/conf-service";
 export * from "./services/task-service";
 export * from "./services/ui-service";
+export * from "./services/audio-service";
 
 // 模型视图
 export * from "./model-view/base-service";
@@ -32,10 +33,15 @@ export * from "./model-view/components/popup/popup-message";
 export * from "./model-view/components/resizable/resizable";
 export * from "./model-view/components/resizable/layout";
 export * from "./model-view/components/resizable/align-bottom-top";
+export * from "./model-view/components/resizable/align-top-bottom";
 export * from "./model-view/components/resizable/align-right-left";
+export * from "./model-view/components/left-right-button";
 export * from "./model-view/components/view-group-nesting";
+export * from "./model-view/components/auto-asset/auto-sprite";
 export * from "./model-view/misc";
 export * from "./model-view/state/view-state";
+export * from "./model-view/open-lock/view-lock"
+export * from "./model-view/components/super-rich-text";
 
 // 工具
 export * from "./utils/timer";

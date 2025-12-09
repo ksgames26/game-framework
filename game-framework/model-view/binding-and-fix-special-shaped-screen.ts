@@ -5,7 +5,7 @@ import { type BaseService } from "./base-service";
 import { type BaseView } from "./base-view";
 import { type BaseViewComponent } from "./base-view-component";
 
-const ignore = ["_name", "_objFlags", "__scriptAsset", "node", "_enabled", "__prefab", "__editorExtras__"];
+export const ignore = ["_name", "_objFlags", "__scriptAsset", "node", "_enabled", "__prefab", "__editorExtras__"];
 
 /**
  * 绑定并修复异形屏幕

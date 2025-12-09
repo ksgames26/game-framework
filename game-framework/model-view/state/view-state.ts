@@ -107,6 +107,44 @@ class ViewStateMachine extends AsyncStateMachine<ViewState, DefaultBlackboard, S
 
     private _prev: State = null!;
 
+    /**
+     * 根据状态实力切换状态
+     *
+     * @param {S} newState
+     * @return {*}  {boolean}
+     * @memberof StateMachine
+     */
+    public async changeStateByInstane(newState: State): Promise<void> {
+        // 重写了父类的实现,主要是把状态相同的这个判断去掉
+        // 有这样一种情况
+        // 比如当前状态是1, 然后切换到状态2, 然后切换到状态1
+        // 这个过程连续执行
+        // changeState(1)
+        // changeState(2)
+        // changeState(1)
+        // 由于动画状态机是全异步状态
+        // 会导致加了这个判断只能切换到2而无法成功切换到1
+        // if (this._currentState && newState === this._currentState) {
+        //     return;
+        // }
+
+        if (this._states.every(state => state !== newState)) {
+            // 不允许中途添加新的状态
+            return;
+        }
+
+        if (this._currentState) {
+            await this._currentState.exit(this._owner);
+        }
+
+        let prev = this._currentState;
+        this.beforeStateChange(this._currentState, newState);
+        if (this._currentState) {
+            await this._currentState.enter(this._owner);
+        }
+        this.afterStateChange(prev, this._currentState);
+    }
+
     public changeCurrentState() {
         const owner = this._owner as ViewState;
         let defaultState = owner.createDefaultState();

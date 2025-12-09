@@ -1,9 +1,11 @@
-import { Asset, AssetManager, Component, ImageAsset, Node, Prefab, Sprite, SpriteAtlas, SpriteFrame, Texture2D, _decorator, assert, assetManager, instantiate, js, murmurhash2_32_gc } from "cc";
-import { DEBUG } from "cc/env";
-import { AsyncTask, Container, logger, makeDeferred } from "db://game-core/game-framework";
+import { Asset, AssetManager, Component, Constructor, ImageAsset, Node, Prefab, Sprite, SpriteAtlas, SpriteFrame, Texture2D, _decorator, assert, assetManager, instantiate, js, murmurhash2_32_gc } from "cc";
+import { DEBUG, EDITOR } from "cc/env";
+import { AsyncTask, Container, getLogger, makeDeferred } from "db://game-core/game-framework";
 import { TaskService } from "./task-service";
 
 const { ccclass } = _decorator;
+
+const logger = getLogger("AssetService", { style: { infoColor: '#ff00eaff', warnColor: '#ffc107', errorColor: '#dc3545' } });
 
 /**
  * 目录资源
@@ -15,9 +17,23 @@ const { ccclass } = _decorator;
 @ccclass("DirAsset")
 export class DirAsset extends Asset { }
 
+/**
+ * 网络PNG图片资源
+ *
+ * @export
+ * @class InternetPngImage
+ * @extends {SpriteFrame}
+ */
 @ccclass("InternetPngImage")
 export class InternetPngImage extends SpriteFrame { }
 
+/**
+ * 网络JPG图片资源
+ *
+ * @export
+ * @class InternetJpgImage
+ * @extends {SpriteFrame}
+ */
 @ccclass("InternetJpgImage")
 export class InternetJpgImage extends SpriteFrame { }
 
@@ -29,6 +45,7 @@ export class InternetJpgImage extends SpriteFrame { }
  * @export
  * @class AssetHandle
  */
+@ccclass("AssetHandle")
 class AssetHandle<T extends IGameFramework.Constructor<Asset>> {
 
     /**
@@ -139,6 +156,8 @@ class AssetHandle<T extends IGameFramework.Constructor<Asset>> {
      */
     public addRef(): void {
         this._ref++;
+
+        logger.debug(`addRef asset ${this.toString()}, current ref count is ${this._ref}`);
     }
 
     /**
@@ -149,6 +168,7 @@ class AssetHandle<T extends IGameFramework.Constructor<Asset>> {
     public remRef(): void {
         if (this._ref > 0) {
             this._ref--;
+            logger.debug(`remRef asset ${this.toString()}, current ref count is ${this._ref}`);
         }
     }
 
@@ -338,6 +358,18 @@ export const handleAppend = <T extends IGameFramework.Constructor<Asset>>(asset:
 }
 
 /**
+ * 过滤掉已经加载完成的资源
+ * @param assets 
+ * @returns 
+ */
+export const filterLoadCompleteAssets = <T extends IGameFramework.Constructor<Asset>>(assets: AssetHandle<T>[]): AssetHandle<T>[] => {
+    return assets.filter(asset => {
+        const a = asset.getAsset();
+        return a == null;
+    });
+}
+
+/**
  * 多资源信息
  * 
  * 和Array<AssetInfo>没什么本质区别，唯一的区别就是不需要先遍历一次Array<AssetInfo>来获取bundleUrl，而是直接在loadAssets时根据MultiAssetsInfo.bundle获取bundleUrl。
@@ -427,7 +459,7 @@ export class AsyncLoadDelegate<T extends { name: string, progress: number }> ext
         }, (err, data) => {
             completeOrError = true;
             if (err) {
-                logger.log("load dir failed", err);
+                logger.error("load dir failed", err);
             }
         });
 
@@ -471,7 +503,7 @@ export class AsyncLoadDelegate<T extends { name: string, progress: number }> ext
                 assetManager.loadBundle(bundleUrl, null, (error, data) => {
                     progress++;
                     if (error) {
-                        logger.log("load bundle failed", error);
+                        logger.error("load bundle failed", error);
                     }
                 });
             }
@@ -528,6 +560,11 @@ export class AsyncLoadDelegate<T extends { name: string, progress: number }> ext
                     });
             }
 
+            if (!asset.isDir() && assetSvr.getAsset(asset)) {
+                // 已经加载完成的资源跳过
+                continue;
+            }
+
             let bundle = assetManager.getBundle(asset.bundle) as AssetManager.Bundle;
 
             // 加载文件夹
@@ -550,7 +587,7 @@ export class AsyncLoadDelegate<T extends { name: string, progress: number }> ext
                     itemInfo.done = true;
 
                     if (err) {
-                        logger.log("load dir failed", err);
+                        logger.error("load dir failed", err);
                     }
                 });
             } else {
@@ -567,7 +604,7 @@ export class AsyncLoadDelegate<T extends { name: string, progress: number }> ext
                     itemInfo.done = true;
 
                     if (error) {
-                        logger.log("load bundle failed", error);
+                        logger.error("load bundle failed", error);
                     }
                 });
             }
@@ -625,6 +662,55 @@ export class AsyncLoadDelegate<T extends { name: string, progress: number }> ext
     }
 }
 
+class GFBundle extends AssetManager.Bundle {
+
+    public release(path: string, type?: Constructor<Asset> | null): void {
+        //@ts-ignore
+        const releaseManager = assetManager.getReleaseManager();
+        const assSvr = Container.get(AssetService)!;
+
+        if (path && type) {
+            const key = assSvr.createAssetHandleKey(this.name, type, path);
+            if (assSvr.hasAssetHandle(key)) {
+                const handleRef = assSvr.getOrCreateAssetHandle(this.name, type, path).ref;
+                if (handleRef > 0) {
+                    logger.error(`asset ${this.name}:${path}:${js.getClassName(type)} ref count is ${handleRef}, can not release`);
+                    return;
+                }
+            }
+        }
+
+        const asset = this.get(path, type);
+        if (asset) {
+            logger.info(`bundle ${this.name} release asset ${path}`);
+            releaseManager.tryRelease(asset, true);
+        }
+    }
+
+    public releaseAll(): void {
+        const assets = assetManager.assets;
+        // @ts-ignore
+        const releaseManager = assetManager.getReleaseManager();
+        const name = this.name;
+        const assSvr = Container.get(AssetService)!;
+
+        if (!assSvr.bundleCanReleaseAll(name)) {
+            logger.error(`bundle ${name} has assets that can not be released`);
+            logger.error(`please check AssetService references before releaseAll`);
+            return;
+        }
+
+        assets.forEach((asset): void => {
+            const info = this.getAssetInfo(asset._uuid);
+            if (info && !info.redirect) {
+
+                logger.info(`bundle ${this.name} release asset ${info.path}`);
+                releaseManager.tryRelease(asset, true);
+            }
+        });
+    }
+}
+
 /**
  * 资源服务
  * 
@@ -639,10 +725,10 @@ export class AsyncLoadDelegate<T extends { name: string, progress: number }> ext
 export class AssetService {
 
     private _idGenerator = new js.IDGenerator("AssetService");
-    private _download: AssetManager.Downloader = assetManager.downloader;
     private _handles: Map<number | string, AssetHandle<typeof Asset>> = new Map<number | string, AssetHandle<typeof Asset>>();
     private _assetInst: Map<AssetHandle<typeof Asset>, Asset> = new Map<AssetHandle<typeof Asset>, Asset>();
     private _hashKey: boolean = true;
+    private _initialized: boolean = false;
 
     /**
      * 获取是否使用hash key
@@ -669,6 +755,65 @@ export class AssetService {
         this._hashKey = value;
     }
 
+    public initialize(): void {
+        if (this._initialized) {
+            return;
+        }
+
+        this._initialized = true;
+
+        assetManager.factory.register({
+            "bundle": (id: string, data: any, options: Record<string, any>, onComplete: ((err: Error | null, data?: GFBundle | null) => void)) => {
+                let bundle = assetManager.bundles.get(data.name);
+                if (!bundle) {
+                    bundle = data.name === "resources" ? assetManager.resources : new GFBundle();
+                    data.base = data.base || `${id}/`;
+                    bundle.init(data);
+                }
+                //HACK: Can not import scripts in GameView due to the difference of Scripting System between the GameView and Preview
+                if (!EDITOR) {
+                    // @ts-ignore
+                    import(`virtual:///prerequisite-imports/${bundle.name}`).then((): void => {
+                        onComplete(null, bundle);
+                    }).catch(onComplete);
+                } else {
+                    onComplete(null, bundle);
+                }
+            },
+        });
+
+        logger.info("AssetService initialized");
+    }
+
+    /**
+     * 判断是否存在某个资源句柄
+     *
+     * @template T
+     * @param {(string|number)} key
+     * @return {*}  {boolean}
+     * @memberof AssetService
+     */
+    public hasAssetHandle(key: string | number): boolean {
+        return this._handles.has(key);
+    }
+
+    /**
+     * bundle 能不能 全部释放 
+     *
+     * @param {string} name
+     * @return {*}  {boolean}
+     * @memberof AssetService
+     */
+    public bundleCanReleaseAll(name: string): boolean {
+        for (const [, h] of this._handles) {
+            if (h.bundle == name && h.ref > 0) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     /**
      * 获取一个资源句柄
      *
@@ -681,10 +826,7 @@ export class AssetService {
      */
     public getOrCreateAssetHandle<T extends IGameFramework.Constructor<Asset>>(bundle: string, type: T, path: string): AssetHandle<T> {
         // bundle - path - type name
-        let key: string | number =
-            this._hashKey ?
-                murmurhash2_32_gc(`${bundle}:${path}:${js.getClassName(type)}`, 0x234) :
-                `${bundle}:${path}:${js.getClassName(type)}`;
+        let key: string | number = this.createAssetHandleKey(bundle, type, path);
 
         let handle = this._handles.get(key) as unknown as IGameFramework.Nullable<AssetHandle<T>>;
 
@@ -705,6 +847,25 @@ export class AssetService {
     }
 
     /**
+     * 创建一个资源唯一Key
+     *
+     * @param {string} bundle
+     * @param {IGameFramework.Constructor<Asset>} type
+     * @param {string} path
+     * @return {*}  {(number | string)}
+     * @memberof AssetService
+     */
+    public createAssetHandleKey(bundle: string, type: IGameFramework.Constructor<Asset>, path: string): number | string {
+        // bundle - path - type name
+        let key: string | number =
+            this._hashKey ?
+                murmurhash2_32_gc(`${bundle}:${path}:${js.getClassName(type)}`, 0x234) :
+                `${bundle}:${path}:${js.getClassName(type)}`;
+
+        return key;
+    }
+
+    /**
      * 加载单个资源
      * 
      * 加载单个资源，如果资源已经加载，则直接返回
@@ -719,13 +880,19 @@ export class AssetService {
 
         // 如果是远程网络资源
         if (handle.internet) {
-            const inst = await this.getAsyncInternetPathAsset(handle.path, handle.type) as IGameFramework.Nullable<InstanceType<T>>;
+            let inst: IGameFramework.Nullable<InstanceType<T>> = this._assetInst.get(handle as unknown as AssetHandle<typeof Asset>) as IGameFramework.Nullable<InstanceType<T>>;
+            if (inst) {
+                return inst;
+            }
+
+            inst = await this.getAsyncInternetPathAsset(handle.path, handle.type) as IGameFramework.Nullable<InstanceType<T>>;
             if (inst) {
                 this._assetInst.set(handle as unknown as AssetHandle<typeof Asset>, inst as Asset);
                 return inst;
             }
         }
 
+        // 不是远程网络资源 而是 bundle 资源
         const bundle = await this.getAsyncBundleUrl(handle.bundle);
         if (!bundle) {
             return;
@@ -745,7 +912,7 @@ export class AssetService {
                 if (!err) {
                     resolve(data);
                 } else {
-                    logger.log("load asset failed", err);
+                    logger.error("load asset failed", err);
                     resolve(null!);
                 }
             });
@@ -1015,6 +1182,68 @@ export class AssetService {
     }
 
     /**
+     * 回收所有未使用的资源
+     *
+     * @memberof AssetService
+     */
+    public releaseUnusedAssets(): void {
+        logger.info("release unused assets");
+
+        for (const [, h] of this._handles) {
+            if (h.ref <= 0) {
+                this.releaseAsset(h, true);
+            }
+        }
+    }
+
+    /**
+     * 获取spr里面的spriteFrame的info
+     *
+     * @param {Sprite} spr
+     * @return {*}  {{ nativeImgUrl: string, uuid: string, bundle: string, path: string }}
+     * @memberof AssetService
+     */
+    public getSpriteFrameInfo(spr: SpriteFrame): { nativeImgUrl: string, uuid: string, bundle: string, path: string, refCount: number };
+    public getSpriteFrameInfo(spr: Sprite | SpriteFrame): { nativeImgUrl: string, uuid: string, bundle: string, path: string, refCount: number } {
+        if (!spr) {
+            return { nativeImgUrl: "", bundle: "", path: "", uuid: "", refCount: 0 };
+        }
+
+        let spriteFrame: SpriteFrame = null!;
+        if (spr instanceof Sprite) {
+            if (!spr.spriteFrame) {
+                return { nativeImgUrl: "", bundle: "", path: "", uuid: "", refCount: 0 };
+            }
+
+            spriteFrame = spr.spriteFrame;
+        } else {
+            spriteFrame = spr;
+        }
+
+        const uuid = spriteFrame.uuid;
+
+        let nativeImgUrl = (spriteFrame.texture as Texture2D)?.image?.nativeUrl;
+        let bundleName = "";
+        let path = "";
+        let refCount = spriteFrame.refCount;
+
+        try {
+            assetManager.bundles.forEach(bundle => {
+                const info = bundle.getAssetInfo(uuid);
+                if (info) {
+                    bundleName = bundle.name;
+                    path = info.path;
+
+                    throw new Error("break");
+                }
+            });
+
+        } finally {
+            return { nativeImgUrl: nativeImgUrl ?? "", uuid, bundle: bundleName, path, refCount };
+        }
+    }
+
+    /**
      * 获取资源Bundle
      *
      * @private
@@ -1030,7 +1259,7 @@ export class AssetService {
                     if (!error) {
                         resolve(data);
                     } else {
-                        logger.log("load bundle failed", error);
+                        logger.error("load bundle failed", error);
                         resolve(null!);
                     }
                 });
@@ -1058,7 +1287,7 @@ export class AssetService {
         const { promise, resolve } = makeDeferred();
         assetManager.loadRemote(path, { ext: downloadSuffix }, (err, data) => {
             if (err) {
-                logger.log("download internet asset failed", err);
+                logger.error("download internet asset failed", err);
                 resolve(null!);
                 return;
             }
@@ -1119,7 +1348,8 @@ export class AssetService {
             return;
         }
 
-        assetHandle.remRef();
+        assetHandle.ref > 0 && assetHandle.remRef();
+
         // bundle - path - type name
         let key: string | number = assetHandle.hashCode();
 
@@ -1128,13 +1358,19 @@ export class AssetService {
 
         if (assetHandle.ref <= 0 && doDestroy) {
             if (assetHandle.internet) {
+
                 const inst = this._assetInst.get(assetHandle as unknown as AssetHandle<typeof Asset>);
                 if (inst) {
+                    logger.info(`destroy internet asset: path=${assetHandle.path}, type=${js.getClassName(assetHandle.type)}`);
+
                     inst.destroy();
                     this._assetInst.delete(assetHandle as unknown as AssetHandle<typeof Asset>);
                 }
                 this._handles.delete(key);
             } else {
+
+                logger.info(`release asset: bundle=${assetHandle.bundle}, path=${assetHandle.path}, type=${js.getClassName(assetHandle.type)}`);
+
                 bundle.release(assetHandle.path, assetHandle.type);
             }
         }
