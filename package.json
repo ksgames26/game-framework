@@ -2,7 +2,7 @@
   "$schema": "./@types/schema/package/index.json",
   "package_version": 2,
   "name": "game-framework",
-  "version": "1.0.0",
+  "version": "1.0.8",
   "author": "v",
   "editor": ">=3.8.3",
   "scripts": {
@@ -22,7 +22,7 @@
     "xlsx": "^0.18.5"
   },
   "gameDependencies": {
-    "game-core": "v1.0.3"
+    "game-core": "v1.0.4"
   },
   "panels": {
     "set-name": {
