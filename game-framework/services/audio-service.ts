@@ -1,6 +1,6 @@
 import { _decorator, AudioClip, AudioSource, director, Node } from "cc";
 import { Container, getLogger } from "db://game-core/game-framework";
-import { AssetService, type AssetHandle } from "db://game-framework/game-framework";
+import { AssetService, type AssetHandle } from "./asset-service";
 
 const { ccclass } = _decorator;
 const audioLogger = getLogger("AudioService");
