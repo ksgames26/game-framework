@@ -262,6 +262,11 @@ export const methods = {
         const endRowCol = await Editor.Profile.getProject("game-framework", "i18n:game-framework.i18n_conf_parse_end_row_col", "project");
         defaultLan = await Editor.Profile.getProject("game-framework", "i18n:game-framework.i18n_conf_default_lan", "project");
 
+        if (!path || !startRowCol || !endRowCol) {
+            console.error("i18n configuration path or row and column not set.");
+            return;
+        }
+
         if (startRowCol == "0-0") {
             return;
         }
