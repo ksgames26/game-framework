@@ -18,7 +18,8 @@
     "fs-extra": "^11.3.0",
     "ts-morph": "^25.0.1",
     "typescript": "^4.9.5",
-    "vue": "^3.5.13"
+    "vue": "^3.5.13",
+    "xlsx": "^0.18.5"
   },
   "panels": {
     "set-name": {
@@ -35,23 +36,113 @@
   },
   "contributions": {
     "inspector": {
-        "section": {
-            "node": {
-                "ViewState": "./dist/inspector/view-state.js"
-            }
+      "section": {
+        "node": {
+          "ViewState": "./dist/inspector/view-state.js",
+          "I18NLabel": "./dist/inspector/i18n-label.js",
+          "I18NRichText": "./dist/inspector/i18n-label.js",
+          "I18NSprite": "./dist/inspector/i18n-sprite.js"
         }
+      }
+    },
+    "scene": {
+      "script": "./dist/scene/scene.js"
+    },
+    "profile": {
+      "project": {
+        "i18n:game-framework.i18n_conf_path": {
+          "default": "0-0",
+          "message": "i18n_conf_path_changed"
+        },
+        "i18n:game-framework.i18n_conf_parse_start_row_col": {
+          "default": "0-0",
+          "message": "i18n_conf_parse_start_row_col_changed"
+        },
+        "i18n:game-framework.i18n_conf_parse_end_row_col": {
+          "default": "0-0",
+          "message": "i18n_conf_parse_end_row_col_changed"
+        },
+        "i18n:game-framework.i18n_conf_default_lan": {
+          "default": "zh",
+          "message": "i18n_conf_default_lan_changed"
+        }
+      }
+    },
+    "project": {
+      "conf_path": {
+        "label": "i18n:game-framework.i18n_conf_path",
+        "content": {
+          "i18n:game-framework.i18n_conf_path": {
+            "ui": "ui-input"
+          },
+          "i18n:game-framework.i18n_conf_parse_start_row_col": {
+            "ui": "ui-input"
+          },
+          "i18n:game-framework.i18n_conf_parse_end_row_col": {
+            "ui": "ui-input"
+          },
+          "i18n:game-framework.i18n_conf_default_lan": {
+            "ui": "ui-input"
+          }
+        }
+      }
     },
     "menu": [
       {
         "path": "i18n:game-framework.game_framework",
         "label": "i18n:game-framework.createTemplate",
         "message": "create_template"
+      },
+      {
+        "path": "i18n:game-framework.game_framework",
+        "label": "i18n:game-framework.i18n_conf_refresh_after_save",
+        "message": "i18n_conf_refresh_after_save_changed"
       }
     ],
     "messages": {
+      "asset-db:ready": {
+        "methods": [
+          "onAssetDBReady"
+        ]
+      },
+      "scene:ready": {
+        "methods": [
+          "onSceneReady"
+        ]
+      },
       "create_template": {
         "methods": [
           "createTemplate"
+        ]
+      },
+      "i18n_getInfoOfI18NConf": {
+        "methods": [
+          "getInfoOfI18NConf"
+        ]
+      },
+      "i18n_conf_path_changed": {
+        "methods": [
+          "onI18NConfPathChanged"
+        ]
+      },
+      "i18n_conf_parse_start_row_col_changed": {
+        "methods": [
+          "onI18NConfParseStartRowColChanged"
+        ]
+      },
+      "i18n_conf_parse_end_row_col_changed": {
+        "methods": [
+          "onI18NConfParseEndRowColChanged"
+        ]
+      },
+      "i18n_conf_default_lan_changed": {
+        "methods": [
+          "onI18NConfDefaultLanChanged"
+        ]
+      },
+      "i18n_conf_refresh_after_save_changed": {
+        "methods": [
+          "onI18NConfRefreshAfterSaveChanged"
         ]
       }
     },
@@ -59,6 +150,12 @@
       "mount": {
         "path": "./game-framework",
         "readonly": false
+      }
+    },
+    "assets": {
+      "menu": {
+        "methods": "./dist/assets/assets-db.js",
+        "assetMenu": "onAssetMenu"
       }
     },
     "hierarchy": {

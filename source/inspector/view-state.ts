@@ -66,6 +66,11 @@ export async function update(this: PanelThis, dump: any) {
     this.dump = dump;
     const content = (this.$.content as HTMLElement);
 
+    const editorMode = Editor.EditMode.getMode();
+    if (editorMode === "animation") {
+        return;
+    }
+
     for (const key in dump.value) {
         const value = dump.value[key];
         let $prop: UIProp | null = content.querySelector(`ui-prop[key=${key}]`);

@@ -1,16 +1,17 @@
 import { _decorator } from "cc";
 
+import { Container, logger } from "db://game-core/game-framework";
 import { EventDispatcher } from "../core/event-dispatcher";
 import { AssetService } from "../services/asset-service";
 import { TaskService } from "../services/task-service";
 import { OpenViewOptions, UIService } from "../services/ui-service";
-import { Container } from "db://game-core/game-framework";
 import { ObserverValue } from "../utils/observer-value";
+import { I18NService, I18NSpriteHandle } from "../i18n/i18n-services";
 const { ccclass } = _decorator;
 
 @ccclass("ViewState/BaseService")
 export abstract class BaseService<
-    U extends  { [key: string]: any } = {},
+    U extends { [key: string]: any } = {},
     E extends IGameFramework.EventOverview = { [key: string]: any },
 > extends EventDispatcher<E> {
     private _observerValues: { [K in keyof U]?: ObserverValue<U[K]> } = {};
@@ -39,6 +40,71 @@ export abstract class BaseService<
      * @memberof BaseService
      */
     public taskSvr: TaskService = Container.get(TaskService)!;
+
+    /**
+     * 国际化服务
+     *
+     * @type {I18NService}
+     * @memberof BaseService
+     */
+    public i18nSvr: I18NService = Container.get(I18NService)!;
+
+    /**
+     * 国际化字符串
+     *
+     * @param {string} key
+     * @param {...string[]} args
+     * @return {*}  {string}
+     * @memberof BaseService
+     */
+    public t(key: string, ...args: string[]): string {
+        return this.i18nSvr.getString(key, ...args);
+    }
+
+    /**
+     * 国际化图片资源句柄
+     *
+     * @param {string} key
+     * @return {*}  {Promise<IGameFramework.Nullable<I18NSpriteHandle>>}
+     * @memberof BaseService
+     */
+    public async h(key: string): Promise<IGameFramework.Nullable<I18NSpriteHandle>> {
+        return await this.i18nSvr.getAssetHandle(key);
+    }
+
+    /**
+     * 调用其他服务的函数
+     *
+     * @template T
+     * @param {(string | IGameFramework.Nullable<IGameFramework.Constructor<unknown>>)} name
+     * @param {string} method
+     * @param {...any[]} args
+     * @return {*}  {IGameFramework.Nullable<Promise<T>>}
+     * @memberof BaseService
+     */
+    public async rpcService<T>(name: string | IGameFramework.Nullable<IGameFramework.Constructor<unknown>>, method: string, ...args: any[]): IGameFramework.Nullable<Promise<T>> {
+        let svr: BaseService = null!;
+        if (typeof name === "string") {
+            svr = Container.getByName(name);
+        } else {
+            svr = Container.get(name) as BaseService;
+        }
+
+        if (svr) {
+            try {
+                const retu = svr[method](...args);
+                if (retu instanceof Promise) {
+                    return await retu;
+                } else {
+                    return retu;
+                }
+            } catch (error) {
+                logger.error(`callOtherService ${name} ${method} error`, error);
+            }
+        } else {
+            logger.error(`callOtherService ${name} is not exist`);
+        }
+    }
 
     /**
      * 获取游戏中心事件分发器

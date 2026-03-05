@@ -27,8 +27,6 @@ export * from "./model-view/base-view";
 export * from "./model-view/base-view-component";
 export * from "./model-view/components/draggable-node";
 export * from "./model-view/components/label/popup-utils";
-export * from "./model-view/components/list";
-export * from "./model-view/components/list-item";
 export * from "./model-view/components/popup/popup-message";
 export * from "./model-view/components/resizable/resizable";
 export * from "./model-view/components/resizable/layout";
@@ -38,6 +36,7 @@ export * from "./model-view/components/resizable/align-right-left";
 export * from "./model-view/components/left-right-button";
 export * from "./model-view/components/view-group-nesting";
 export * from "./model-view/components/auto-asset/auto-sprite";
+export * from "./model-view/components/virtual-list/index"
 export * from "./model-view/misc";
 export * from "./model-view/state/view-state";
 export * from "./model-view/open-lock/view-lock"

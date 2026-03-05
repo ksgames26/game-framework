@@ -121,6 +121,7 @@ function getModuleSpecifier(fromFilePath: string, targetFilePath: string): strin
     return modulePath;
 }
 
+
 function isSameType(types: { name: string, type: string }[], name: string) {
     // 检查是否已经存在同名节点
     const existingType = types.find(t => t.name === name);
@@ -499,7 +500,7 @@ async function findNodesWithUnderscorePrefix(assetInfo: AssetInfo & { prefab: { 
     }
 }
 
-async function generatorMembers(filePath: string, types: { name: string, type: string }[]) {
+async function generatorMembers(filePath: string, types: { name: string, type: string }[], scope: Scope) {
     // 创建项目
     const project = new Project();
 
@@ -565,7 +566,7 @@ async function generatorMembers(filePath: string, types: { name: string, type: s
                         arguments: [`{type: ${typeName}}`]
                     }],
                     isReadonly: true,
-                    scope: Scope.Private
+                    scope: scope
                 });
 
                 // 添加导入
@@ -618,6 +619,7 @@ async function generatorMembers(filePath: string, types: { name: string, type: s
 
             const name = prop.getName();
             const type = prop.getType().getText();
+            prop.setScope(scope);
             const typeDef = types.find(item => item.name === name);
 
             if (typeDef) {
@@ -726,7 +728,7 @@ async function generatorMembers(filePath: string, types: { name: string, type: s
                         // 没有找到 property 装饰器，添加新装饰器
                         prop.addDecorator({
                             name: 'property',
-                            arguments: [`{type: ${typeName}}`]
+                            arguments: [`{type: ${typeName}}`],
                         });
                     }
 
@@ -845,7 +847,56 @@ export function onRootMenu(assetInfo: AssetInfo & { components: any[], prefab: {
                                 const assetInfo = await Editor.Message.request('asset-db', 'query-asset-info', uuid);
 
                                 if (assetInfo && assetInfo.file) {
-                                    generatorMembers(assetInfo.file, types ?? []);
+                                    generatorMembers(assetInfo.file, types ?? [], Scope.Private);
+
+                                    Editor.Dialog.info('构造成员函数成功');
+                                }
+                            }
+                        }
+                    }
+
+                    if (!hasBaseView) {
+                        Editor.Dialog.error(Editor.I18n.t('game-framework.hierarchy.error.noBaseView'));
+                    }
+                }
+            },
+        },
+
+        {
+            label: 'i18n:game-framework.hierarchy.menu.publicMenu',
+            async click() {
+                if (!assetInfo) {
+                    Editor.Dialog.info('i18n:game-framework.hierarchy.error.noAssetInfo');
+                } else {
+
+                    // 遍历节点树查找带下划线的节点和属性
+                    const types = await findNodesWithUnderscorePrefix(assetInfo);
+
+                    // 处理组件信息
+                    const components = assetInfo.components;
+                    if (!components || components.length === 0) {
+                        return;
+                    }
+
+                    let hasBaseView = false;
+                    for (let index = 0; index < components.length; index++) {
+                        const component = components[index];
+
+                        // 获取组件详细信息
+                        const componentInfo = await Editor.Message.request('scene', 'query-component',
+                            component.value  // 这里的 value 就是组件的 UUID
+                        );
+
+                        if (componentInfo) {
+                            const baseView = componentInfo.extends?.find(item => item.startsWith("BaseView") || item.startsWith("BaseViewComponent"));
+                            if (baseView) {
+                                hasBaseView = true;
+                                // 获取资源信息
+                                const uuid = Editor.Utils.UUID.decompressUUID(componentInfo.cid!);
+                                const assetInfo = await Editor.Message.request('asset-db', 'query-asset-info', uuid);
+
+                                if (assetInfo && assetInfo.file) {
+                                    generatorMembers(assetInfo.file, types ?? [], Scope.Public);
 
                                     Editor.Dialog.info('构造成员函数成功');
                                 }
