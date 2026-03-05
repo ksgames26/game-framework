@@ -2,6 +2,8 @@ import { assert, js } from "cc";
 import { DEBUG } from "cc/env";
 import { Container } from "db://game-core/game-framework";
 import { Byte } from "db://game-core/game-framework";
+import { _decorator } from "cc";
+const { ccclass } = _decorator;
 
 const enum PACKER {
     /**
@@ -26,6 +28,7 @@ const enum PACKER {
  * @export
  * @class ConfService
  */
+@ccclass('ConfService')
 export class ConfService<T = IGameFramework.ITableConf> {
 
     private _resource: T = js.createMap();

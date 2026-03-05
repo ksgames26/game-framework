@@ -2,6 +2,8 @@ import { EventTouch, Node, NodeEventType, Pool, assert, game, js } from "cc";
 import { DEBUG } from "cc/env";
 import { AsyncGeneratorMultipleCallsError, AsyncSet, AsyncTask, SinglyLinkedList, SyncTask, implementation, logger } from "db://game-core/game-framework";
 import { EventDispatcher } from "../core/event-dispatcher";
+import { _decorator } from "cc";
+const { ccclass } = _decorator;
 
 /**
  * 可等待任务句柄
@@ -11,6 +13,7 @@ import { EventDispatcher } from "../core/event-dispatcher";
  * @implements {IGameFramework.ITaskHandle<T>}
  * @template T
  */
+@ccclass("TaskHandle")
 export class TaskHandle<T> extends EventDispatcher<{ done: T }> implements IGameFramework.ITaskHandle<T> {
     private static _idGenerator = new js.IDGenerator("TaskHandle");
     private _disposed: boolean = false;
@@ -861,6 +864,7 @@ class AsyncTouchEventBuilder<T> {
  * @implements {ISingleton}
  * @implements {IGameFramework.ITaskRuntime}
  */
+@ccclass("TaskService")
 @implementation("IGameFramework.ITaskRuntime")
 export class TaskService implements IGameFramework.ISingleton, IGameFramework.ITaskRuntime {
     private _running: Array<TaskHandle<unknown>> = [];

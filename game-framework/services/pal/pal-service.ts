@@ -1,7 +1,10 @@
 import { DefaultPal } from "./impl/default-pal";
 import { EmptyPal } from "./impl/empty";
 import { ILoginAdapter, IPal } from "./ipal";
+import { _decorator } from "cc";
+const { ccclass } = _decorator;
 
+@ccclass("PalService")
 export class PalService implements IPal {
 
     private _pal: IPal = new EmptyPal();

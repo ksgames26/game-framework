@@ -1,6 +1,7 @@
-import { Component, director, Node } from "cc";
+import { Component, director, Node, _decorator } from "cc";
 import { Deferred, fnEmpty, implementation, SortedSet } from "db://game-core/game-framework";
 import { ObjectPools } from "../utils/object-pool";
+const { ccclass } = _decorator;
 
 class Listener implements IGameFramework.Listener, IGameFramework.IPoolObject {
     public eventName: string = "";
@@ -159,6 +160,7 @@ export class EventList {
  * @implements {IGameFramework.IEventDispatcher<TEventOverview>}
  * @template TEventOverview
  */
+@ccclass("EventDispatcher")
 @implementation("IGameFramework.IEventDispatcher")
 export class EventDispatcher<TEventOverview extends IGameFramework.EventOverview = {}> implements IGameFramework.IEventDispatcher<TEventOverview> {
     private listeners: Map<IGameFramework.EventName, EventList> = new Map();
