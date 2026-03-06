@@ -1,6 +1,6 @@
 import { Asset, EventKeyboard, EventTouch, Input, Layers, Node, Prefab, Rect, UITransform, Widget, _decorator, assert, find, input, js, sys } from "cc";
 import { DEBUG } from "cc/env";
-import { Container, SortedSet, isChildClassOf, isEmptyStr, logger, utils } from "db://game-core/game-framework";
+import { Container, SortedSet, isChildClassOf, isEmptyStr, logger, makeDeferred, utils } from "db://game-core/game-framework";
 import { EventDispatcher } from "../core/event-dispatcher";
 import { type BaseService } from "../model-view/base-service";
 import { type BaseView } from "../model-view/base-view";
@@ -17,6 +17,11 @@ export const enum UILayer {
      * 自定义层
      */
     Custom,
+    
+    /**
+     * 根节点
+     */
+    Root,
 
     /**
      * 全局事件点击层
@@ -26,34 +31,29 @@ export const enum UILayer {
     Touch,
 
     /**
-     *顶部
-     */
-    Top,
-
-    /**
-    / 中间
-    */
-    Mid,
-
-    /**
-    / 底部
-    */
-    Bottom,
-
-    /**
     / 弹出窗口
     */
     PopUp,
 
     /**
-    / 其他窗口
-    */
-    Other,
+     *顶部
+     */
+    Top,
 
     /**
-     * 根节点
-     */
-    Root,
+    * 中间
+    */
+    Mid,
+
+    /**
+    * 底部
+    */
+    Bottom,
+
+    /**
+    * 其他窗口
+    */
+    Other,
 }
 
 export const enum UIShowType {
@@ -150,6 +150,13 @@ export class OpenViewOptions {
          * 如果layer选择了Custom，那么这个节点不能为空
          */
         public layerNode: IGameFramework.Nullable<Node> = null,
+
+        /**
+         * 面板的名称
+         * 
+         * 默认会使用面板Prefab的类名作为viewName, 但是如果你定义了这个属性，那么会使用你定义的名称
+         */
+        public viewName: IGameFramework.Nullable<string> = null,
 
         /**
          * 是否是pushPopView。pushPopView和非pushPopView在界面管理上无任何关系
@@ -414,13 +421,17 @@ export class UIService extends EventDispatcher<EventOverview> implements IGameFr
         parent.addChild(comp);
 
         if (isAsync) {
-            return (async () => {
-                await viewComponent.asyncAfterAddChild();
-                if (viewComponent.isDisposed) {
-                    return null;
-                }
-                return viewComponent;
-            })();
+            const { promise, resolve } = makeDeferred<IGameFramework.Nullable<C>>();
+            viewComponent.
+                asyncAfterAddChild().
+                then(() => {
+                    if (viewComponent.isDisposed) {
+                        resolve(null);
+                    } else { 
+                        resolve(viewComponent);
+                    }
+                })
+            return promise;
         } else {
             viewComponent.afterAddChild();
             return viewComponent;
@@ -508,6 +519,8 @@ export class UIService extends EventDispatcher<EventOverview> implements IGameFr
         let asset: IGameFramework.Nullable<Asset> = null;
         DEBUG && assert(!options.prefab.isDir(), "prefab should be a file");
 
+        logger.debug(`UIService openView ${options.prefab}`);
+
         asset = await this._loadService.loadAssetAsync(options.prefab);
         if (!asset) return;
         if (asset instanceof Prefab) {
@@ -536,7 +549,7 @@ export class UIService extends EventDispatcher<EventOverview> implements IGameFr
                 // addChild 会触发onLoad
                 layer.addChild(ui);
                 view.afterAddChild(options, service);
-                this._openingViews.set(view.viewName, { view, clickBg });
+                this._openingViews.set(options.viewName ?? view.viewName, { view, clickBg });
 
                 if (options.pushPopView) {
                     this._history.push(view);
@@ -562,6 +575,8 @@ export class UIService extends EventDispatcher<EventOverview> implements IGameFr
 
                 // 假如在show之后返回的面板实例已经销毁了或者父面板不存在了，那么返回这个面板已经没有了意义
                 // 反而可能误用导致空指针异常
+
+                logger.debug(`UIService openView ${options.prefab} success or not disposed: ${!view.isDisposed}`);
                 return view.isDisposed ? void 0 : view;
             } else {
 
