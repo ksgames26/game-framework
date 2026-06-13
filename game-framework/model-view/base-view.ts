@@ -1,6 +1,6 @@
-import { Component, EventKeyboard, Node, Renderer, UITransform, Widget, _decorator, easing, js, lerp } from "cc";
+import { Component, EventKeyboard, Node, Renderer, UIOpacity, UITransform, Widget, _decorator, easing, js, lerp } from "cc";
 import { DEBUG } from "cc/env";
-import { AsyncTask, Container, isDestroyed, logger, secFrame } from "db://game-core/game-framework";
+import { AsyncTask, Container, Deferred, isDestroyed, logger, secFrame } from "db://game-core/game-framework";
 import { getEventListeners } from "../core/decorators";
 import { AssetService } from "../services/asset-service";
 import { TaskService } from "../services/task-service";
@@ -16,6 +16,7 @@ const { ccclass, menu } = _decorator;
 type ViewArgs<T extends BaseService> = T extends BaseService<any, any, infer A> ? A : unknown;
 
 enum PushPopState {
+    
     None, Push, Pop
 }
 
@@ -52,6 +53,9 @@ export abstract class BaseView<T extends BaseService, S = any> extends Component
     protected _pushPopState: PushPopState = PushPopState.None;
     protected _viewComponents: BaseViewComponent<T, BaseView<T>>[] = [];
     protected _fixSpecialShapedScreenHasCache = true;
+    protected _closeDeferred: Deferred<void> | null = null;
+    protected _sourceOpacityValue: number = 255;
+    protected _uiOpacityAdd: boolean = false;
     private _disposed: boolean = false;
     private _viewCloseAfterPromise: IGameFramework.Nullable<Promise<IGameFramework.Nullable<ReturnType<this["onClose"]>>>>;
     private _viewCloseAfterResolve: IGameFramework.Nullable<(r: IGameFramework.Nullable<any>) => void>;
@@ -114,6 +118,47 @@ export abstract class BaseView<T extends BaseService, S = any> extends Component
     }
 
     /**
+     * 面板打开后前处理透明度
+     *
+     * @protected
+     * @memberof BaseView
+     */
+    public beforeOpacity() {
+        this._sourceOpacityValue = 255;
+        let uiOpacity = this.node.getComponent(UIOpacity);
+        if (uiOpacity) {
+            this._sourceOpacityValue = uiOpacity.opacity;
+        } else {
+            uiOpacity = this.node.addComponent(UIOpacity);
+            this._uiOpacityAdd = true;
+        }
+
+        uiOpacity.opacity = 0;
+    }
+
+    /**
+     * 面板打开后处理透明度
+     *
+     * @protected
+     * @memberof BaseView
+     */
+    public afterOpacity() {
+        if (this.isDisposed) {
+            return;
+        }
+
+        const uiOpacity = this.node.getComponent(UIOpacity);
+        if (!uiOpacity) {
+            return;
+        }
+        uiOpacity.opacity = this._sourceOpacityValue;
+        if (this._uiOpacityAdd) {
+            uiOpacity.destroy();
+            this._uiOpacityAdd = false;
+        }
+    }
+
+    /**
     * 获取界面本身的点击背景
     *
     * @private
@@ -167,8 +212,27 @@ export abstract class BaseView<T extends BaseService, S = any> extends Component
      * @memberof BaseView
      */
     public async close() {
+        if (this.isDisposed) {
+            return;
+        }
+
+        if (this._closeDeferred) {
+            return this._closeDeferred?.promise;
+        }
+
+        this._closeDeferred = new Deferred<void>();
+        const deferred = this._closeDeferred;
+
         const uiService = Container.get(UIService)!;
-        await uiService.closeOrPopViewInstance(this);
+        const name = this._options.viewName;
+        if (name) {
+            await uiService.closeOrPopViewName(name);
+        } else {
+            await uiService.closeOrPopViewInstance(this);
+        }
+
+        deferred?.fulfilled();
+        this._closeDeferred = null;
     }
 
     /**
@@ -185,6 +249,7 @@ export abstract class BaseView<T extends BaseService, S = any> extends Component
         this._service = null!;
         this._options?.dispose();
         this._options = null!;
+        this._closeDeferred = null;
 
         DEBUG && logger.log(`dispose view : ${this.viewName}`);
     }

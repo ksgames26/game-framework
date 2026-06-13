@@ -18,7 +18,7 @@ const { ccclass, property, menu } = _decorator;
  */
 @ccclass("BaseViewComponent")
 @menu("GameFramework/ViewState/BaseViewComponent")
-export abstract class BaseViewComponent<U extends BaseService, T extends BaseView<U>> extends Component {
+export abstract class BaseViewComponent<U extends BaseService, T extends BaseView<U>, S = any> extends Component {
     /**
      * 组件所在的祖视图
      *
@@ -31,6 +31,44 @@ export abstract class BaseViewComponent<U extends BaseService, T extends BaseVie
     protected _canCloseSelf: boolean = false;
     protected _closeDeferred: Deferred<void> | null = null;
     protected _viewComponents: BaseViewComponent<U, T>[] = [];
+    private _viewCloseAfterPromise: IGameFramework.Nullable<Promise<IGameFramework.Nullable<ReturnType<this["onClose"]>>>>;
+    private _viewCloseAfterResolve: IGameFramework.Nullable<(r: IGameFramework.Nullable<any>) => void>;
+
+    /**
+     * 面板关闭后通知
+     *
+     * @template R
+     * @param {IGameFramework.Nullable<R>} r
+     * @return {*}  {void}
+     * @memberof BaseViewComponent
+     */
+    public applyViewCloseAfter<R extends ReturnType<this["onClose"]>>(r: IGameFramework.Nullable<R>): void {
+        if (!this._viewCloseAfterResolve) {
+            return;
+        }
+
+        this._viewCloseAfterResolve!(r);
+        this._viewCloseAfterResolve = null;
+        this._viewCloseAfterPromise = null;
+    }
+
+    /**
+     * 等待组件关闭后处理
+     *
+     * @return {*}  {Promise<IGameFramework.Nullable<ReturnType<this["onClose"]>>>}
+     * @memberof BaseViewComponent
+     */
+    public async viewCloseAfter(): Promise<IGameFramework.Nullable<ReturnType<this["onClose"]>>> {
+        if (this.isDisposed) {
+            logger.warn(`${this.constructor.name} 已销毁, 无法在调用viewCloseAfter`);
+            return Promise.resolve(null);
+        }
+
+        if (this._viewCloseAfterPromise) return this._viewCloseAfterPromise;
+        return this._viewCloseAfterPromise = new Promise<IGameFramework.Nullable<ReturnType<this["onClose"]>>>(resolve => {
+            this._viewCloseAfterResolve = resolve;
+        });
+    }
 
     /**
      * 如果你的组件是单独的prefab组件,那么你可以设置这个属性为true
@@ -122,12 +160,14 @@ export abstract class BaseViewComponent<U extends BaseService, T extends BaseVie
         }
 
         this._closeDeferred = new Deferred<void>();
+        let r = null!;
         if (this._canCloseSelf) {
-            await this.onClose?.();
+            r = await this.onClose?.();
         }
 
         const deferred = this._closeDeferred;
         this.node.removeFromParent();
+        this.applyViewCloseAfter(r);
         this.node.destroy();
         deferred?.fulfilled();
         this._closeDeferred = null;
@@ -273,5 +313,5 @@ export abstract class BaseViewComponent<U extends BaseService, T extends BaseVie
      *
      * @memberof BaseViewComponent
      */
-    public async onClose?(): Promise<void>;
+    public async onClose?(): Promise<S>;
 }
