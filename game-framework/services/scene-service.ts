@@ -596,7 +596,10 @@ export class SceneService extends EventDispatcher<SceneEventOverview> implements
      * @return {*}  {Promise<IGameFramework.Nullable<BaseView<T>>>}
      * @memberof SceneService
      */
-    public async openSceneView<T extends BaseService>(service: IGameFramework.Constructor<T>, args?: any): Promise<IGameFramework.Nullable<BaseView<T>>> {
+    public async openSceneView<T extends BaseService<any, any, any>>(
+        service: IGameFramework.Constructor<T>,
+        args?: T extends BaseService<any, any, infer A> ? A : unknown,
+    ): Promise<IGameFramework.Nullable<BaseView<T>>> {
         if (!this._currentScene || this._currentScene.phase !== ScenePhase.Running) {
             logger.warn("SceneService: 当前没有运行中的场景，无法打开UI");
             return null;

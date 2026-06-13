@@ -13,9 +13,10 @@ const { ccclass } = _decorator;
 export abstract class BaseService<
     U extends { [key: string]: any } = {},
     E extends IGameFramework.EventOverview = { [key: string]: any },
+    A = unknown,
 > extends EventDispatcher<E> {
     private _observerValues: { [K in keyof U]?: ObserverValue<U[K]> } = {};
-    public abstract viewOptions(): OpenViewOptions;
+    public abstract viewOptions(): OpenViewOptions<A>;
 
     /**
      * 资源管理引用

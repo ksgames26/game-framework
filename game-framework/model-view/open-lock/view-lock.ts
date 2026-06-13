@@ -6,6 +6,8 @@ import { BaseService } from "../base-service";
 import { BaseView } from "../base-view";
 import { BaseViewComponent } from "../base-view-component";
 
+type ServiceViewArgs<T extends BaseService> = T extends BaseService<any, any, infer A> ? A : unknown;
+
 /**
  * ViewComponentLock 是一个管理视图组件锁定状态的类。
  *
@@ -108,7 +110,7 @@ export class ViewLock<S extends BaseService, StreamTaskReturn> {
     private _canOpen: boolean = true;
     private _enableRefCount: boolean = false;
     private _openingTask: Promise<IGameFramework.Nullable<BaseView<S, StreamTaskReturn>>> | null = null;
-    private _options: OpenViewOptions;
+    private _options: OpenViewOptions<ServiceViewArgs<S>>;
     private _isOpening: boolean = false;
     private _refCount: number = 0;
     private _service: S;
@@ -116,14 +118,14 @@ export class ViewLock<S extends BaseService, StreamTaskReturn> {
     private _shouldCloseAfterOpen: boolean = false;
     private _view: BaseView<S, StreamTaskReturn> | null = null;
 
-    private _beforeTask: (args?: unknown) => Promise<unknown> = null!;
-    public set beforeTask(task: (args?: unknown) => Promise<unknown>) {
+    private _beforeTask: (args?: ServiceViewArgs<S>) => Promise<IGameFramework.Nullable<ServiceViewArgs<S>>> = null!;
+    public set beforeTask(task: (args?: ServiceViewArgs<S>) => Promise<IGameFramework.Nullable<ServiceViewArgs<S>>>) {
         this._beforeTask = task;
     }
 
     public constructor(
         service: S,
-        options?: OpenViewOptions,
+        options?: OpenViewOptions<ServiceViewArgs<S>>,
         nodeDestroyClear?: Node,
         lockOptions?: {
             /**
@@ -136,7 +138,8 @@ export class ViewLock<S extends BaseService, StreamTaskReturn> {
         },
     ) {
         this._service = service;
-        this._options = options ?? service.viewOptions();
+        const serviceOptions = service.viewOptions() as OpenViewOptions<ServiceViewArgs<S>>;
+        this._options = options ?? serviceOptions;
         this._nodeDestroyClear = nodeDestroyClear;
         this._enableRefCount = !!lockOptions?.enableRefCount;
 
@@ -165,7 +168,7 @@ export class ViewLock<S extends BaseService, StreamTaskReturn> {
         return this._refCount;
     }
 
-    public async openView(args?: unknown): Promise<IGameFramework.Nullable<BaseView<S, StreamTaskReturn>>> {
+    public async openView(args?: ServiceViewArgs<S>): Promise<IGameFramework.Nullable<BaseView<S, StreamTaskReturn>>> {
         if (this._enableRefCount && this._view && !this._view.isDisposed) {
             this._refCount++;
             return this._view;
@@ -218,7 +221,7 @@ export class ViewLock<S extends BaseService, StreamTaskReturn> {
         }
     }
 
-    private async doOpenView(args?: unknown): Promise<IGameFramework.Nullable<BaseView<S, StreamTaskReturn>>> {
+    private async doOpenView(args?: ServiceViewArgs<S>): Promise<IGameFramework.Nullable<BaseView<S, StreamTaskReturn>>> {
         const uiSvr = Container.get(UIService)!;
         if (!uiSvr) {
             logger.error("UIService instance is null");
@@ -327,7 +330,7 @@ export const canOpenView = async <S extends BaseService>(
     viewLocks: ViewLock<S, any>[],
     view: BaseView<BaseService<{}, { [key: string]: any; }>, any>,
     viewName: string,
-    args?: unknown
+    args?: ServiceViewArgs<S>
 ): Promise<boolean | BaseView<S, any>> => {
     // 我是否可以打开
     if (!openLock.viewCanOpen) {

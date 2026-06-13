@@ -9,6 +9,7 @@ import { ViewLock } from "../model-view/open-lock/view-lock";
 import { AssetHandle, AssetService } from "./asset-service";
 
 type OnCloseReturn<T extends BaseView<U>, U extends BaseService> = IGameFramework.Nullable<ReturnType<T["onClose"]>>;
+type ServiceViewArgs<T extends BaseService> = T extends BaseService<any, any, infer A> ? A : unknown;
 
 const { ccclass } = _decorator;
 
@@ -109,7 +110,7 @@ export const enum UIAnimaOpenMode {
  * @export
  * @class OpenViewOptions
  */
-export class OpenViewOptions {
+export class OpenViewOptions<TArgs = unknown> {
     public constructor(
 
         /**
@@ -138,7 +139,7 @@ export class OpenViewOptions {
          * 
          * 这里是任意类型，具体类型由面板自身决定。
          */
-        public args: IGameFramework.Nullable<Readonly<any>> = void 0,
+        public args: IGameFramework.Nullable<Readonly<TArgs>> = void 0,
 
         /**
          * 面板的层级
@@ -531,7 +532,7 @@ export class UIService extends EventDispatcher<EventOverview> implements IGameFr
      * @return {*}  {Promise<T>} 异步返回面板实例
      * @memberof UIService
      */
-    public async openView<T extends BaseView<U>, U extends BaseService>(options: OpenViewOptions, service: U): Promise<IGameFramework.Nullable<T>> {
+    public async openView<T extends BaseView<U>, U extends BaseService>(options: OpenViewOptions<ServiceViewArgs<U>>, service: U): Promise<IGameFramework.Nullable<T>> {
         let asset: IGameFramework.Nullable<Asset> = null;
         DEBUG && assert(!options.prefab.isDir(), "prefab should be a file");
 
@@ -742,7 +743,7 @@ export class UIService extends EventDispatcher<EventOverview> implements IGameFr
         if (!this._waitModeLock) {
             this._waitModeLock = new ViewLock<BaseService, void>(
                 this as unknown as BaseService,
-                new OpenViewOptions(
+                new OpenViewOptions<void>(
                     this._waitModeHandle,
                     UIAnimaOpenMode.NONE,
                     UIShowType.FullScreenView,
@@ -779,14 +780,14 @@ export class UIService extends EventDispatcher<EventOverview> implements IGameFr
      * @return {*}  {Promise<BaseView>}
      * @memberof UIService
      */
-    public async open<T extends BaseService, U>(t: IGameFramework.Constructor<T>, args: IGameFramework.Nullable<U> = void 0): Promise<IGameFramework.Nullable<BaseView<T>>> {
+    public async open<T extends BaseService>(t: IGameFramework.Constructor<T>, args: IGameFramework.Nullable<ServiceViewArgs<T>> = void 0): Promise<IGameFramework.Nullable<BaseView<T>>> {
         const service = Container.get<T>(t);
         if (!service) {
             logger.warn(`service not found: ${js.getClassName(t)}`);
             return;
         }
-        const options = service.viewOptions();
-        if (args) options.args = args;
+        const options = service.viewOptions() as OpenViewOptions<ServiceViewArgs<T>>;
+        if (args !== void 0 && args !== null) options.args = args;
         const view = await this.openView(options, service);
         return view as BaseView<T>;
     }

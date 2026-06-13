@@ -13,6 +13,8 @@ import { bindingAndFixSpecialShapedScreen } from "./binding-and-fix-special-shap
 
 const { ccclass, menu } = _decorator;
 
+type ViewArgs<T extends BaseService> = T extends BaseService<any, any, infer A> ? A : unknown;
+
 enum PushPopState {
     None, Push, Pop
 }
@@ -28,7 +30,7 @@ export abstract class BaseView<T extends BaseService, S = any> extends Component
      * @type {OpenViewOptions}
      * @memberof BaseView
      */
-    protected _options: OpenViewOptions = null!;
+    protected _options: OpenViewOptions<ViewArgs<T>> = null!;
 
     public get options() {
         return this._options;
@@ -392,7 +394,7 @@ export abstract class BaseView<T extends BaseService, S = any> extends Component
      *
      * @memberof BaseView
      */
-    public afterAddChild(options: OpenViewOptions, service: T) {
+    public afterAddChild(options: OpenViewOptions<ViewArgs<T>>, service: T) {
         if (!this._canBindingFix) return;
         this._canBindingFix = false;
         this._options = options;
