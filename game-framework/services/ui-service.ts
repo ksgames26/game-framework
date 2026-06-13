@@ -10,6 +10,32 @@ import { AssetHandle, AssetService } from "./asset-service";
 
 type OnCloseReturn<T extends BaseView<U>, U extends BaseService> = IGameFramework.Nullable<ReturnType<T["onClose"]>>;
 type ServiceViewArgs<T extends BaseService> = T extends BaseService<any, any, infer A> ? A : unknown;
+type ArgsPath = ReadonlyArray<PropertyKey>;
+
+export interface OpenViewOptionsArgsReplaceEvent<TArgs> {
+    type: "replace";
+    path: [];
+    args: IGameFramework.Nullable<TArgs>;
+    previousArgs: IGameFramework.Nullable<TArgs>;
+    value: IGameFramework.Nullable<TArgs>;
+    previousValue: IGameFramework.Nullable<TArgs>;
+}
+
+export interface OpenViewOptionsArgsMutationEvent<TArgs> {
+    type: "set" | "delete";
+    path: ArgsPath;
+    args: IGameFramework.Nullable<TArgs>;
+    value: unknown;
+    previousValue: unknown;
+}
+
+export type OpenViewOptionsArgsChange<TArgs> =
+    | OpenViewOptionsArgsReplaceEvent<TArgs>
+    | OpenViewOptionsArgsMutationEvent<TArgs>;
+
+interface OpenViewOptionsEventOverview<TArgs> {
+    "args-change": OpenViewOptionsArgsChange<TArgs>;
+}
 
 const { ccclass } = _decorator;
 
@@ -110,7 +136,10 @@ export const enum UIAnimaOpenMode {
  * @export
  * @class OpenViewOptions
  */
-export class OpenViewOptions<TArgs = unknown> {
+export class OpenViewOptions<TArgs = unknown> extends EventDispatcher<OpenViewOptionsEventOverview<TArgs>> {
+    private _args: IGameFramework.Nullable<TArgs> = void 0;
+    private _argsProxyCache: WeakMap<object, object> = new WeakMap();
+
     public constructor(
 
         /**
@@ -139,7 +168,7 @@ export class OpenViewOptions<TArgs = unknown> {
          * 
          * 这里是任意类型，具体类型由面板自身决定。
          */
-        public args: IGameFramework.Nullable<Readonly<TArgs>> = void 0,
+        args: IGameFramework.Nullable<TArgs> = void 0,
 
         /**
          * 面板的层级
@@ -175,7 +204,114 @@ export class OpenViewOptions<TArgs = unknown> {
          * pushPopView为true时生效, activeOrEnableRender为false时, 采用禁用render组件的方式隐藏node。否则采用view node的active属性隐藏node。
          */
         public activeOrEnableRender: boolean = true,
-    ) { }
+    ) {
+        super();
+        this.setArgsInternal(args, false);
+    }
+
+    public get args(): IGameFramework.Nullable<TArgs> {
+        return this._args;
+    }
+
+    public set args(value: IGameFramework.Nullable<TArgs>) {
+        this.setArgsInternal(value, true);
+    }
+
+    public setArgs(value: IGameFramework.Nullable<TArgs>): void {
+        this.args = value;
+    }
+
+    public notifyArgsChanged(): void {
+        this.dispatch("args-change", {
+            type: "replace",
+            path: [],
+            args: this._args,
+            previousArgs: this._args,
+            value: this._args,
+            previousValue: this._args,
+        });
+    }
+
+    public dispose(): void {
+        this._args = void 0;
+        this._argsProxyCache = new WeakMap();
+        this.clearUp();
+    }
+
+    private setArgsInternal(value: IGameFramework.Nullable<TArgs>, emit: boolean): void {
+        const previousArgs = this._args;
+        this._argsProxyCache = new WeakMap();
+        this._args = this.createReactiveArgs(value, []);
+
+        if (!emit) {
+            return;
+        }
+
+        this.dispatch("args-change", {
+            type: "replace",
+            path: [],
+            args: this._args,
+            previousArgs,
+            value: this._args,
+            previousValue: previousArgs,
+        });
+    }
+
+    private createReactiveArgs<V>(value: V, path: PropertyKey[]): V {
+        if (value === null || value === undefined || typeof value !== "object") {
+            return value;
+        }
+
+        const source = value as object;
+        const cache = this._argsProxyCache.get(source);
+        if (cache) {
+            return cache as V;
+        }
+
+        const proxy = new Proxy(source as Record<PropertyKey, unknown>, {
+            get: (target, key, receiver) => {
+                const result = Reflect.get(target, key, receiver);
+                return this.createReactiveArgs(result, [...path, key]);
+            },
+            set: (target, key, newValue, receiver) => {
+                const previousValue = Reflect.get(target, key, receiver);
+                if (previousValue === newValue) {
+                    return true;
+                }
+
+                const success = Reflect.set(target, key, newValue, receiver);
+                if (success) {
+                    this.dispatch("args-change", {
+                        type: "set",
+                        path: [...path, key],
+                        args: this._args,
+                        value: newValue,
+                        previousValue,
+                    });
+                }
+
+                return success;
+            },
+            deleteProperty: (target, key) => {
+                const previousValue = Reflect.get(target, key);
+                const success = Reflect.deleteProperty(target, key);
+                if (success) {
+                    this.dispatch("args-change", {
+                        type: "delete",
+                        path: [...path, key],
+                        args: this._args,
+                        value: void 0,
+                        previousValue,
+                    });
+                }
+
+                return success;
+            },
+        });
+
+        this._argsProxyCache.set(source, proxy);
+        return proxy as V;
+    }
 }
 
 interface EventOverview {

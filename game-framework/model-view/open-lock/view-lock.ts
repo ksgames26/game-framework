@@ -270,6 +270,7 @@ export class ViewLock<S extends BaseService, StreamTaskReturn> {
 
     public clear(): void {
         this._view = null!;
+        this._options?.dispose();
         this._options = null!;
         this._service = null!;
         this._nodeDestroyClear = null!;

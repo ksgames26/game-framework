@@ -4,7 +4,7 @@ import { AsyncTask, Container, isDestroyed, logger, secFrame } from "db://game-c
 import { getEventListeners } from "../core/decorators";
 import { AssetService } from "../services/asset-service";
 import { TaskService } from "../services/task-service";
-import { UIAnimaOpenMode, UIService, type OpenViewOptions } from "../services/ui-service";
+import { UIAnimaOpenMode, UIService, type OpenViewOptions, type OpenViewOptionsArgsChange } from "../services/ui-service";
 import { type BaseService } from "./base-service";
 import { BaseViewComponent } from "./base-view-component";
 import { bindingAndFixSpecialShapedScreen } from "./binding-and-fix-special-shaped-screen";
@@ -34,6 +34,10 @@ export abstract class BaseView<T extends BaseService, S = any> extends Component
 
     public get options() {
         return this._options;
+    }
+
+    public get args(): IGameFramework.Nullable<ViewArgs<T>> {
+        return this._options?.args;
     }
 
     /**
@@ -179,6 +183,8 @@ export abstract class BaseView<T extends BaseService, S = any> extends Component
         this.remRef();
         this.node.destroy();
         this._service = null!;
+        this._options?.dispose();
+        this._options = null!;
 
         DEBUG && logger.log(`dispose view : ${this.viewName}`);
     }
@@ -400,6 +406,8 @@ export abstract class BaseView<T extends BaseService, S = any> extends Component
         this._options = options;
         this._service = service;
 
+        this._options.addAutoListener("args-change", this.handleArgsChange, this);
+
         const safeArea = Container.get(UIService)!.getSafeArea();
         bindingAndFixSpecialShapedScreen(this, safeArea, this, this._fixSpecialShapedScreenHasCache ? new Map() : void 0);
     }
@@ -430,6 +438,10 @@ export abstract class BaseView<T extends BaseService, S = any> extends Component
      * @memberof BaseView
      */
     protected showBefore(): void {
+
+    }
+
+    protected onArgsChange(_event: OpenViewOptionsArgsChange<ViewArgs<T>>): void {
 
     }
 
@@ -583,5 +595,13 @@ export abstract class BaseView<T extends BaseService, S = any> extends Component
 
         // 最后还原锚点
         trans.setAnchorPoint(anchorX, anchorY);
+    }
+
+    private handleArgsChange(event: OpenViewOptionsArgsChange<ViewArgs<T>>): void {
+        if (this.isDisposed) {
+            return;
+        }
+
+        this.onArgsChange(event);
     }
 }
