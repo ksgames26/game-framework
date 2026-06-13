@@ -262,6 +262,10 @@ export class OpenViewOptions<TArgs = unknown> extends EventDispatcher<OpenViewOp
             return value;
         }
 
+        if (path.length > 0) {
+            return value;
+        }
+
         const source = value as object;
         const cache = this._argsProxyCache.get(source);
         if (cache) {
