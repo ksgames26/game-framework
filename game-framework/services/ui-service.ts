@@ -1,10 +1,11 @@
-import { Asset, EventKeyboard, EventTouch, Input, Layers, Node, Prefab, Rect, UITransform, Widget, _decorator, assert, find, input, js, sys } from "cc";
+import { Asset, BlockInputEvents, EventKeyboard, EventTouch, Input, Layers, Node, Prefab, Rect, UITransform, Widget, _decorator, assert, find, input, js, sys } from "cc";
 import { DEBUG } from "cc/env";
 import { Container, SortedSet, isChildClassOf, isEmptyStr, logger, makeDeferred, utils } from "db://game-core/game-framework";
 import { EventDispatcher } from "../core/event-dispatcher";
 import { type BaseService } from "../model-view/base-service";
 import { type BaseView } from "../model-view/base-view";
 import { type BaseViewComponent } from "../model-view/base-view-component";
+import { ViewLock } from "../model-view/open-lock/view-lock";
 import { AssetHandle, AssetService } from "./asset-service";
 
 type OnCloseReturn<T extends BaseView<U>, U extends BaseService> = IGameFramework.Nullable<ReturnType<T["onClose"]>>;
@@ -214,14 +215,18 @@ export class UIService extends EventDispatcher<EventOverview> implements IGameFr
     });
 
     private _clickBgHandle: IGameFramework.Nullable<AssetHandle<typeof Prefab>> = null!;
+    private _waitModeHandle: IGameFramework.Nullable<AssetHandle<typeof Prefab>> = null!;
+    private _waitModeLock: IGameFramework.Nullable<ViewLock<BaseService, void>> = null!;
 
     //#region IGameFramework.ISingleton
     public onStart(args: IGameFramework.Nullable<{
         clickBgHandle: AssetHandle<typeof Prefab>,
+        waitModeHandle?: AssetHandle<typeof Prefab>,
         createTouchLayer: boolean
     }>): void {
         DEBUG && assert(!!(args && args.clickBgHandle), "clickBgHandle is null");
         this._clickBgHandle = args!.clickBgHandle;
+        this._waitModeHandle = args?.waitModeHandle ?? null;
         this._root = find("Canvas/Root")!;
         DEBUG && assert(!!this._root, "Canvas/Root not found");
 
@@ -330,6 +335,17 @@ export class UIService extends EventDispatcher<EventOverview> implements IGameFr
     public hasOpenView(n: string): boolean {
         if (this._openingViews.get(n)) return true;
         return false
+    }
+
+    /**
+     * 获取已经打开的VIEW
+     *
+     * @param {string} n
+     * @return {*}  {IGameFramework.Nullable<BaseView<BaseService>>}
+     * @memberof UIService
+     */
+    public getOpenView(n: string): IGameFramework.Nullable<BaseView<BaseService>> {
+        return this._openingViews.get(n)?.view;
     }
 
 
@@ -531,6 +547,7 @@ export class UIService extends EventDispatcher<EventOverview> implements IGameFr
 
             const view = ui.getComponent("BaseView") as T;
             if (view) {
+
                 const layer = options.layer == UILayer.Custom ? options.layerNode : this.getLayer(options.layer);
                 if (!layer) {
                     logger.error(`layer ${options.layer} node is null`);
@@ -544,6 +561,14 @@ export class UIService extends EventDispatcher<EventOverview> implements IGameFr
                 if (options.showType == UIShowType.BlackBaseView) {
                     clickBg = await view.getClickBg() ?? await this.getClickBg();
                     layer.addChild(clickBg);
+
+                    if (!clickBg.getComponent(BlockInputEvents)) {
+                        clickBg.addComponent(BlockInputEvents);
+                    }
+                } else {
+                    if (!ui.getComponent(BlockInputEvents)) {
+                        ui.addComponent(BlockInputEvents);
+                    }
                 }
 
                 // addChild 会触发onLoad
@@ -706,6 +731,42 @@ export class UIService extends EventDispatcher<EventOverview> implements IGameFr
         }
 
         return view.viewCloseAfter() as OnCloseReturn<T, U>;
+    }
+
+    public async openWaitMode(): Promise<IGameFramework.Nullable<BaseView<BaseService, void>>> {
+        if (!this._waitModeHandle) {
+            logger.error("waitModeHandle is null");
+            return null!;
+        }
+
+        if (!this._waitModeLock) {
+            this._waitModeLock = new ViewLock<BaseService, void>(
+                this as unknown as BaseService,
+                new OpenViewOptions(
+                    this._waitModeHandle,
+                    UIAnimaOpenMode.NONE,
+                    UIShowType.FullScreenView,
+                    void 0,
+                    UILayer.Top,
+                    null,
+                    "wait-mode-view",
+                ),
+                null,
+                {
+                    enableRefCount: true,
+                },
+            );
+        }
+
+        return await this._waitModeLock!.openView();
+    }
+
+    public async closeWaitMode(): Promise<void> {
+        if (!this._waitModeLock) {
+            return;
+        }
+
+        await this._waitModeLock.closeView();
     }
 
     /**

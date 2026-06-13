@@ -94,15 +94,26 @@ export class ViewComponentLock<T extends BaseView<BaseService>, S extends BaseVi
 /**
  * ViewLock 是一个管理视图锁定状态的类。
  *
+ * 默认模式下，它用于防止同一视图重复打开。
+ * 当 `enableRefCount` 为 `true` 时，会切换为引用计数模式：
+ * - 多次 `openView()` 会复用同一个视图实例
+ * - 多次 `closeView()` 会递减引用，直到计数归零才真正关闭
+ *
+ * 这个模式适合等待态、全局遮罩这类“单例复用视图”。
+ *
  * @export
  * @class ViewLock
  */
 export class ViewLock<S extends BaseService, StreamTaskReturn> {
     private _canOpen: boolean = true;
+    private _enableRefCount: boolean = false;
+    private _openingTask: Promise<IGameFramework.Nullable<BaseView<S, StreamTaskReturn>>> | null = null;
     private _options: OpenViewOptions;
     private _isOpening: boolean = false;
+    private _refCount: number = 0;
     private _service: S;
     private _nodeDestroyClear: Node;
+    private _shouldCloseAfterOpen: boolean = false;
     private _view: BaseView<S, StreamTaskReturn> | null = null;
 
     private _beforeTask: (args?: unknown) => Promise<unknown> = null!;
@@ -110,10 +121,24 @@ export class ViewLock<S extends BaseService, StreamTaskReturn> {
         this._beforeTask = task;
     }
 
-    public constructor(service: S, options?: OpenViewOptions, nodeDestroyClear?: Node) {
+    public constructor(
+        service: S,
+        options?: OpenViewOptions,
+        nodeDestroyClear?: Node,
+        lockOptions?: {
+            /**
+             * 是否启用引用计数模式。
+             *
+             * 启用后，已打开或打开中的视图会被复用，
+             * 直到所有调用方都执行了 `closeView()` 才会真正关闭。
+             */
+            enableRefCount?: boolean;
+        },
+    ) {
         this._service = service;
         this._options = options ?? service.viewOptions();
         this._nodeDestroyClear = nodeDestroyClear;
+        this._enableRefCount = !!lockOptions?.enableRefCount;
 
         if (this._nodeDestroyClear) {
             this._nodeDestroyClear.on(Node.EventType.NODE_DESTROYED, this.clear, this);
@@ -136,20 +161,72 @@ export class ViewLock<S extends BaseService, StreamTaskReturn> {
         return this._isOpening;
     }
 
+    public get refCount() {
+        return this._refCount;
+    }
+
     public async openView(args?: unknown): Promise<IGameFramework.Nullable<BaseView<S, StreamTaskReturn>>> {
+        if (this._enableRefCount && this._view && !this._view.isDisposed) {
+            this._refCount++;
+            return this._view;
+        }
+
+        if (this._enableRefCount && this._openingTask) {
+            this._refCount++;
+            return await this._openingTask;
+        }
+
         if (!this._canOpen) {
             logger.warn("View is locking, cannot open view");
             return;
         }
 
         this._canOpen = false;
+        if (this._enableRefCount) {
+            this._refCount++;
+            this._shouldCloseAfterOpen = false;
+            this._openingTask = this.doOpenView(args);
+            try {
+                return await this._openingTask;
+            } finally {
+                this._openingTask = null;
+            }
+        }
+
+        return await this.doOpenView(args);
+    }
+
+    public async closeView(): Promise<void> {
+        if (this._enableRefCount) {
+            if (this._refCount > 0) {
+                this._refCount--;
+            }
+
+            if (this._refCount > 0) {
+                return;
+            }
+
+            if (this._isOpening && !this._view) {
+                this._shouldCloseAfterOpen = true;
+                return;
+            }
+        }
+
+        if (this._view) {
+            await this._view.close();
+            this._view = null;
+        }
+    }
+
+    private async doOpenView(args?: unknown): Promise<IGameFramework.Nullable<BaseView<S, StreamTaskReturn>>> {
         const uiSvr = Container.get(UIService)!;
         if (!uiSvr) {
             logger.error("UIService instance is null");
-
             this._canOpen = true;
+            this._refCount = 0;
             return;
         }
+
         this._isOpening = true;
         this._options.args = undefined;
         if (this._beforeTask) {
@@ -157,36 +234,34 @@ export class ViewLock<S extends BaseService, StreamTaskReturn> {
             if (result) {
                 this._options.args = result;
             }
-        } else {
-            if (args) {
-                this._options.args = args;
-            }
+        } else if (args) {
+            this._options.args = args;
         }
-        const view = this._view = await uiSvr.openView(this._options, this._service);
-        this._isOpening = false;
-        if (view) {
 
-            // 打开成功，等待关闭
-            view.viewCloseAfter().then(() => {
+        try {
+            const view = this._view = await uiSvr.openView(this._options, this._service);
+            if (view) {
+                view.viewCloseAfter().then(() => {
+                    this._view = null;
+                    this._canOpen = true;
+                    this._refCount = 0;
+                    this._shouldCloseAfterOpen = false;
+                });
 
-                // 视图关闭后，清空引用
-                this._view = null;
-
-                // 可以继续打开
+                if (this._enableRefCount && (this._shouldCloseAfterOpen || this._refCount <= 0)) {
+                    this._shouldCloseAfterOpen = false;
+                    this._refCount = 0;
+                    await view.close();
+                }
+            } else {
                 this._canOpen = true;
-            });
-        } else {
+                this._refCount = 0;
+                this._shouldCloseAfterOpen = false;
+            }
 
-            // 打开失败。可以继续打开
-            this._canOpen = true;
-        }
-        return view;
-    }
-
-    public async closeView(): Promise<void> {
-        if (this._view) {
-            await this._view.close();
-            this._view = null;
+            return view;
+        } finally {
+            this._isOpening = false;
         }
     }
 
@@ -196,6 +271,11 @@ export class ViewLock<S extends BaseService, StreamTaskReturn> {
         this._service = null!;
         this._nodeDestroyClear = null!;
         this._beforeTask = null!;
+        this._openingTask = null;
+        this._refCount = 0;
+        this._isOpening = false;
+        this._canOpen = true;
+        this._shouldCloseAfterOpen = false;
     }
 }
 
