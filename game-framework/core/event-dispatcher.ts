@@ -1,7 +1,140 @@
-import { Component, director, Node, _decorator } from "cc";
+import { Component, director, Node } from "cc";
 import { Deferred, fnEmpty, implementation, SortedSet } from "db://game-core/game-framework";
 import { ObjectPools } from "../utils/object-pool";
-const { ccclass } = _decorator;
+
+let gameFrameworkInitialized = false;
+director.once("game-framework-initialize", () => {
+    gameFrameworkInitialized = true;
+});
+
+type DecoratedListenerMeta<TEventOverview extends IGameFramework.EventOverview = IGameFramework.EventOverview> = {
+    dispatcher: () => EventDispatcher<TEventOverview>;
+    eventName: Extract<keyof TEventOverview, string> | string;
+    count: number;
+    propertyKey: string | symbol;
+    listener: IGameFramework.EventListener<IGameFramework.EventData>;
+};
+
+type DecoratedListenerState = {
+    dispatcher: EventDispatcher;
+    eventName: string;
+    listener: IGameFramework.EventListener<IGameFramework.EventData>;
+};
+
+type StrictSequenceTask = {
+    eventData: IGameFramework.EventData;
+    deferred: Deferred<void>;
+};
+
+const decoratedListenersKey = Symbol("game-framework:decorated-event-listeners");
+const decoratedListenersStateKey = Symbol("game-framework:decorated-event-listeners-state");
+const decoratedListenersPendingKey = Symbol("game-framework:decorated-event-listeners-pending");
+const decoratedListenersHooksKey = Symbol("game-framework:decorated-event-listeners-hooks");
+const decoratedListenersWrappedKey = Symbol("game-framework:decorated-event-listeners-wrapped");
+
+type DecoratedEventTarget = {
+    [decoratedListenersKey]?: DecoratedListenerMeta[];
+    [decoratedListenersStateKey]?: Map<string | symbol, DecoratedListenerState>;
+    [decoratedListenersPendingKey]?: Set<string | symbol>;
+    [decoratedListenersHooksKey]?: boolean;
+};
+
+function getDecoratedListenerState(target: object): Map<string | symbol, DecoratedListenerState> {
+    const decoratedTarget = target as DecoratedEventTarget;
+    decoratedTarget[decoratedListenersStateKey] ??= new Map();
+    return decoratedTarget[decoratedListenersStateKey]!;
+}
+
+function getDecoratedListenerPending(target: object): Set<string | symbol> {
+    const decoratedTarget = target as DecoratedEventTarget;
+    decoratedTarget[decoratedListenersPendingKey] ??= new Set();
+    return decoratedTarget[decoratedListenersPendingKey]!;
+}
+
+function registerDecoratedListeners(target: object): void {
+    const metas = ((Object.getPrototypeOf(target) ?? target) as DecoratedEventTarget)[decoratedListenersKey];
+    if (!metas?.length) return;
+
+    const states = getDecoratedListenerState(target);
+    const pending = getDecoratedListenerPending(target);
+
+    metas.forEach(meta => {
+        if (states.has(meta.propertyKey) || pending.has(meta.propertyKey)) {
+            return;
+        }
+
+        const register = () => {
+            if (!pending.delete(meta.propertyKey) || states.has(meta.propertyKey)) {
+                return;
+            }
+
+            const dispatcher = meta.dispatcher();
+            dispatcher.addListener(meta.eventName, meta.listener, target, meta.count);
+            states.set(meta.propertyKey, {
+                dispatcher,
+                eventName: meta.eventName,
+                listener: meta.listener,
+            });
+        };
+
+        if (gameFrameworkInitialized) {
+            pending.add(meta.propertyKey);
+            register();
+        } else {
+            pending.add(meta.propertyKey);
+            director.once("game-framework-initialize", register);
+        }
+    });
+}
+
+function unregisterDecoratedListeners(target: object): void {
+    const metas = ((Object.getPrototypeOf(target) ?? target) as DecoratedEventTarget)[decoratedListenersKey];
+    if (!metas?.length) return;
+
+    const states = getDecoratedListenerState(target);
+    const pending = getDecoratedListenerPending(target);
+
+    metas.forEach(meta => {
+        pending.delete(meta.propertyKey);
+
+        const state = states.get(meta.propertyKey);
+        if (!state) {
+            return;
+        }
+
+        state.dispatcher.removeListener(state.eventName, state.listener, target);
+        states.delete(meta.propertyKey);
+    });
+}
+
+function wrapDecoratedLifecycle(target: object, methodName: string, callback: (instance: object) => void): void {
+    const lifecycleTarget = target as Record<string | symbol, any>;
+    const original = lifecycleTarget[methodName];
+    if (original?.[decoratedListenersWrappedKey]) {
+        return;
+    }
+
+    const wrapped = function (this: object, ...args: unknown[]) {
+        callback(this);
+        return original?.apply(this, args);
+    };
+
+    wrapped[decoratedListenersWrappedKey] = true;
+    lifecycleTarget[methodName] = wrapped;
+}
+
+function ensureDecoratedLifecycleHooks(target: object): void {
+    const decoratedTarget = target as DecoratedEventTarget;
+    if (decoratedTarget[decoratedListenersHooksKey]) {
+        return;
+    }
+
+    decoratedTarget[decoratedListenersHooksKey] = true;
+    wrapDecoratedLifecycle(target, "onLoad", registerDecoratedListeners);
+    wrapDecoratedLifecycle(target, "initialize", registerDecoratedListeners);
+    wrapDecoratedLifecycle(target, "onDestroy", unregisterDecoratedListeners);
+    wrapDecoratedLifecycle(target, "clearUp", unregisterDecoratedListeners);
+}
 
 class Listener implements IGameFramework.Listener, IGameFramework.IPoolObject {
     public eventName: string = "";
@@ -32,6 +165,7 @@ class Listener implements IGameFramework.Listener, IGameFramework.IPoolObject {
     public dispose(): void {
         if (this._disposed) return;
         this._disposed = true;
+        this.onFree();
     }
 
     public get isDisposed(): boolean {
@@ -68,9 +202,17 @@ export function eventListener<TEventOverview extends IGameFramework.EventOvervie
         propertyKey: string | symbol,
         descriptor: TypedPropertyDescriptor<IGameFramework.EventListener<TEventOverview[TEventName]>>
     ) {
-        director.once("game-framework-initialize", () => {
-            dispatcher().addListener(eventName, descriptor.value!, null!, count);
+        const decoratedTarget = target as DecoratedEventTarget;
+        decoratedTarget[decoratedListenersKey] ??= [];
+        decoratedTarget[decoratedListenersKey]!.push({
+            dispatcher,
+            eventName,
+            count,
+            propertyKey,
+            listener: descriptor.value! as IGameFramework.EventListener<IGameFramework.EventData>,
         });
+
+        ensureDecoratedLifecycleHooks(target);
         return descriptor;
     };
 }
@@ -111,6 +253,7 @@ export class EventList {
     public isDispatching: boolean = false;
     public listeners: SortedSet<Listener> = new SortedSet<Listener>((a, b) => a.priority - b.priority);
     public deferred: IGameFramework.Nullable<Deferred<void>> = null;
+    public strictSequenceQueue: StrictSequenceTask[] = [];
 
     /**
      * 是否只分发一次事件
@@ -160,7 +303,6 @@ export class EventList {
  * @implements {IGameFramework.IEventDispatcher<TEventOverview>}
  * @template TEventOverview
  */
-@ccclass("EventDispatcher")
 @implementation("IGameFramework.IEventDispatcher")
 export class EventDispatcher<TEventOverview extends IGameFramework.EventOverview = {}> implements IGameFramework.IEventDispatcher<TEventOverview> {
     private listeners: Map<IGameFramework.EventName, EventList> = new Map();
@@ -176,58 +318,24 @@ export class EventDispatcher<TEventOverview extends IGameFramework.EventOverview
      * @return {*}  {Promise<void>}
      * @memberof EventDispatcher
      */
-    public async dispatchStrictSequence<TEventName extends Extract<keyof TEventOverview, string> | string>(
+    public dispatchStrictSequence<TEventName extends Extract<keyof TEventOverview, string> | string>(
         eventName: TEventName,
         eventData: TEventOverview[TEventName]
     ): Promise<void> {
         const listenersList = this.getListeners(eventName);
-        if (!listenersList) return;
+        if (!listenersList) return Promise.resolve();
 
-        if (listenersList.isDispatching) {
-            return listenersList.deferred!.promise;
-        }
-
-        listenersList.isDispatching = true;
-        listenersList.deferred = new Deferred<void>();
-
-        const listeners = listenersList.listeners;
-
-        for (const listener of listeners) {
-            // 可能因为clear导致listener为空
-            if (!listener) continue;
-
-            if (listener.listener === fnEmpty) {
-                continue; // 忽略空函数监听器
-            }
-
-            await listener.listener.call(listener.callee ?? this, eventData);
-            listener.count--;
-        }
-
-        // 清理无效的监听器
-        listeners.erase(events => {
-            return (events.count <= 0 || events.listener == fnEmpty);
-        }).forEach(listener => {
-            listenersPool.free(listener);
+        const deferred = new Deferred<void>();
+        listenersList.strictSequenceQueue.push({
+            eventData: eventData as IGameFramework.EventData,
+            deferred,
         });
 
-        // 分发完毕后，分发在分发期间add的需要分发的事件
-        await this.operApply(listenersList, eventData);
-
-        // 如果监听器列表为空，一般是要删除的，但是立即事件除外
-        if (listenersList.isEmpty && !listenersList.immediatelyEvent) {
-            this.listeners.delete(eventName);
+        if (!listenersList.isDispatching) {
+            void this.flushStrictSequence(eventName, listenersList);
         }
 
-        listenersList.deferred?.fulfilled();
-        listenersList.deferred = null;
-
-        listenersList.isDispatching = false;
-
-        if (listenersList.immediatelyEvent) {
-            listenersList.dispatched = true;
-            listenersList.dispatchData = eventData;
-        }
+        return deferred.promise;
     }
 
     /**
@@ -253,37 +361,47 @@ export class EventDispatcher<TEventOverview extends IGameFramework.EventOverview
         }
 
         listenersList.isDispatching = true;
-        const listeners = listenersList.listeners;
-        for (const listener of listeners) {
-            if (!listener) continue;
+        let error: unknown = null;
 
-            if (listener.listener === fnEmpty) {
-                continue; // 忽略空函数监听器
+        try {
+            const listeners = listenersList.listeners;
+            for (const listener of listeners) {
+                if (!listener) continue;
+
+                if (listener.listener === fnEmpty) {
+                    continue; // 忽略空函数监听器
+                }
+
+                listener.listener.call(listener.callee ?? this, eventData);
+                listener.count--;
+            }
+        } catch (err) {
+            error = err;
+        } finally {
+            listenersList.listeners.erase(events => {
+                return (events.count <= 0 || events.listener == fnEmpty);
+            }).forEach(listener => {
+                listenersPool.free(listener);
+            });
+
+            // 处理完所有监听器后，执行后续操作
+            void this.operApply(listenersList, eventData as IGameFramework.EventData);
+
+            // 如果监听器列表为空，一般是要删除的，但是立即事件除外
+            if (listenersList.isEmpty && !listenersList.immediatelyEvent) {
+                this.listeners.delete(eventName);
             }
 
-            listener.listener.call(listener.callee ?? this, eventData);
-            listener.count--;
+            listenersList.isDispatching = false;
+
+            if (listenersList.immediatelyEvent && error == null) {
+                listenersList.dispatched = true;
+                listenersList.dispatchData = eventData;
+            }
         }
 
-        listeners.erase(events => {
-            return (events.count <= 0 || events.listener == fnEmpty);
-        }).forEach(listener => {
-            listenersPool.free(listener);
-        });
-
-        // 处理完所有监听器后，执行后续操作
-        this.operApply(listenersList, eventData);
-
-        // 如果监听器列表为空，一般是要删除的，但是立即事件除外
-        if (listenersList.isEmpty && !listenersList.immediatelyEvent) {
-            this.listeners.delete(eventName);
-        }
-
-        listenersList.isDispatching = false;
-
-        if (listenersList.immediatelyEvent) {
-            listenersList.dispatched = true;
-            listenersList.dispatchData = eventData;
+        if (error != null) {
+            throw error;
         }
     }
 
@@ -505,6 +623,35 @@ export class EventDispatcher<TEventOverview extends IGameFramework.EventOverview
     }
 
     /**
+     * 判断是否存在事件名、监听函数、作用域都完全一致的监听器
+     *
+     * @template TEventName
+     * @param {TEventName} eventName
+     * @param {IGameFramework.EventListener<TEventOverview[TEventName]>} listener
+     * @param {unknown} callee
+     * @return {*}  {boolean}
+     * @memberof EventDispatcher
+     */
+    public hasListener<TEventName extends Extract<keyof TEventOverview, string> | string>(
+        eventName: TEventName,
+        listener: IGameFramework.EventListener<TEventOverview[TEventName]>,
+        callee: unknown
+    ): boolean {
+        const listenersList = this.listeners.get(eventName);
+        if (!listenersList || listenersList.isEmpty) {
+            return false;
+        }
+
+        for (const events of listenersList.listeners) {
+            if (events.listener === listener && events.callee === callee) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * 移除所有侦听器。
      *
      * @memberof EventDispatcher
@@ -560,6 +707,88 @@ export class EventDispatcher<TEventOverview extends IGameFramework.EventOverview
         return null!;
     }
 
+    private async flushStrictSequence<TEventName extends Extract<keyof TEventOverview, string> | string>(
+        eventName: TEventName,
+        listenersList: EventList
+    ): Promise<void> {
+        if (listenersList.isDispatching) {
+            return;
+        }
+
+        listenersList.isDispatching = true;
+
+        try {
+            while (listenersList.strictSequenceQueue.length > 0) {
+                const task = listenersList.strictSequenceQueue.shift()!;
+                listenersList.deferred = task.deferred;
+
+                try {
+                    await this.dispatchStrictSequenceOnce(eventName, listenersList, task.eventData);
+                    task.deferred.fulfilled(undefined as void);
+                } catch (error) {
+                    task.deferred.rejected(error);
+                } finally {
+                    listenersList.deferred = null;
+                }
+            }
+        } finally {
+            listenersList.isDispatching = false;
+            listenersList.deferred = null;
+
+            if (listenersList.isEmpty && !listenersList.immediatelyEvent) {
+                this.listeners.delete(eventName);
+            }
+        }
+    }
+
+    private async dispatchStrictSequenceOnce<TEventName extends Extract<keyof TEventOverview, string> | string>(
+        eventName: TEventName,
+        listenersList: EventList,
+        eventData: IGameFramework.EventData
+    ): Promise<void> {
+        let error: unknown = null;
+
+        try {
+            const listeners = listenersList.listeners;
+
+            for (const listener of listeners) {
+                // 可能因为clear导致listener为空
+                if (!listener) continue;
+
+                if (listener.listener === fnEmpty) {
+                    continue; // 忽略空函数监听器
+                }
+
+                await listener.listener.call(listener.callee ?? this, eventData);
+                listener.count--;
+            }
+        } catch (err) {
+            error = err;
+        } finally {
+            listenersList.listeners.erase(events => {
+                return (events.count <= 0 || events.listener == fnEmpty);
+            }).forEach(listener => {
+                listenersPool.free(listener);
+            });
+
+            // 分发完毕后，分发在分发期间add的需要分发的事件
+            await this.operApply(listenersList, eventData);
+
+            if (listenersList.immediatelyEvent && error == null) {
+                listenersList.dispatched = true;
+                listenersList.dispatchData = eventData;
+            }
+
+            if (listenersList.isEmpty && !listenersList.immediatelyEvent) {
+                this.listeners.delete(eventName);
+            }
+        }
+
+        if (error != null) {
+            throw error;
+        }
+    }
+
     /**
      * 执行操作队列中的操作
      *
@@ -569,7 +798,7 @@ export class EventDispatcher<TEventOverview extends IGameFramework.EventOverview
      * @return {*}  {Promise<void>}
      * @memberof EventDispatcher
      */
-    private async operApply(listenersList: EventList, eventData: string): Promise<void> {
+    private async operApply(listenersList: EventList, eventData: IGameFramework.EventData): Promise<void> {
         const queue = listenersList.afterOperationQueue;
         for (const after of queue) {
             // 可能因为clear导致listener为空
@@ -590,15 +819,17 @@ export class EventDispatcher<TEventOverview extends IGameFramework.EventOverview
 
                 // 如果移除成功
                 if (remove) {
-                    if (after.listener!.callee && after.listener!.callee instanceof Deferred) {
+                    if (remove.callee && remove.callee instanceof Deferred) {
                         // 如果是Deferred，则直接完成
                         // 可以让await的监听器结束
-                        after.listener!.callee.fulfilled(null);
+                        remove.callee.fulfilled(null);
                     }
 
+                    listenersPool.free(remove);
+                }else{
+                    // 回收用于查找的临时 listener 对象
                     listenersPool.free(after.listener!);
                 }
-
             } else if (after.operation === "clear") {
                 listenersList.listeners.forEach(listener => {
                     if (listener.callee && listener.callee instanceof Deferred) {
@@ -613,6 +844,9 @@ export class EventDispatcher<TEventOverview extends IGameFramework.EventOverview
 
                 // 这里不移除afterOperationQueue中的操作
                 // 视为在clear后add/remove的都是有效操作，会继续进行
+                if (after.listener) {
+                    listenersPool.free(after.listener);
+                }
             }
         }
 
@@ -629,7 +863,7 @@ export class EventDispatcher<TEventOverview extends IGameFramework.EventOverview
      * @return {*}  {Promise<void>}
      * @memberof EventDispatcher
      */
-    private async afterAdd(listenersList: EventList, after: AfterAdd, eventData: string): Promise<void> {
+    private async afterAdd(listenersList: EventList, after: AfterAdd, eventData: IGameFramework.EventData): Promise<void> {
         const listeners = listenersList.listeners;
 
         const listener = after.listener;
