@@ -133,6 +133,11 @@ export const enum UIAnimaOpenMode {
 /**
  * 打开面板的参数
  *
+ * `args` 采用浅响应设计：
+ * - 整体替换 `args` 会触发 `args-change`
+ * - 根层属性 `set/delete` 会触发 `args-change`
+ * - 不保证嵌套对象内部变更会触发 `args-change`
+ *
  * @export
  * @class OpenViewOptions
  */
@@ -167,6 +172,7 @@ export class OpenViewOptions<TArgs = unknown> extends EventDispatcher<OpenViewOp
          * 面板自身的类型参数
          * 
          * 这里是任意类型，具体类型由面板自身决定。
+         * 如果传入对象，则仅根层属性变更会触发通知。
          */
         args: IGameFramework.Nullable<TArgs> = void 0,
 
@@ -221,6 +227,11 @@ export class OpenViewOptions<TArgs = unknown> extends EventDispatcher<OpenViewOp
         this.args = value;
     }
 
+    /**
+     * 手动触发一次整量替换通知。
+     *
+     * 适用于浅响应覆盖不到的场景，比如嵌套对象内部已被原地修改。
+     */
     public notifyArgsChanged(): void {
         this.dispatch("args-change", {
             type: "replace",
@@ -262,6 +273,7 @@ export class OpenViewOptions<TArgs = unknown> extends EventDispatcher<OpenViewOp
             return value;
         }
 
+        // 这里只对根层做代理，保持实现和性能都足够轻量。
         if (path.length > 0) {
             return value;
         }

@@ -234,10 +234,10 @@ export class ViewLock<S extends BaseService, StreamTaskReturn> {
         this._options.args = undefined;
         if (this._beforeTask) {
             const result = await this._beforeTask(args);
-            if (result) {
+            if (result !== undefined) {
                 this._options.args = result;
             }
-        } else if (args) {
+        } else if (args !== undefined) {
             this._options.args = args;
         }
 
